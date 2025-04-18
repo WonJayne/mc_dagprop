@@ -1,4 +1,5 @@
 # encoding: utf-8
+# Legacy script, if you want to build without poetry etc..., just bare metal
 import sys
 
 from setuptools import Extension, find_packages, setup

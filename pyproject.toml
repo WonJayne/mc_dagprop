@@ -1,6 +1,6 @@
 [project]
 name = "mc-dagprop"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = [
     {name = "flfuchs",email = "flfuchs@student.ethz.ch"}
