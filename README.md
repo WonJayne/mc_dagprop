@@ -1,6 +1,6 @@
 # mc_dagprop
 
-[![PyPI version](https://img.shields.io/pypi/v/mc_dagprop.svg)](https://pypi.org/project/mc_dagprop/) [![Python Versions](https://img.shields.io/pypi/pyversions/mc_dagprop.svg)](https://pypi.org/project/mc_dagprop/) [![License](https://img.shields.io/pypi/l/mc_dagprop.svg)](./LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/mc_dagprop.svg)](https://pypi.org/project/mc_dagprop/) [![Python Versions](https://img.shields.io/pypi/pyversions/mc_dagprop.svg)](https://pypi.org/project/mc_dagprop/) [![License](https://img.shields.io/pypi/l/mc_dagprop.svg)](https://github.com/WonJayne/mc_dagprop/blob/main/LICENSE)
 
 **mc_dagprop** is a fast, Monte Carlo–style propagation simulator for directed acyclic graphs (DAGs), written in C++ with Python bindings via **pybind11**.  
 It allows you to model timing networks (timetables, precedence graphs, etc.) and inject user‑defined delay distributions on links.  

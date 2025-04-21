@@ -192,7 +192,7 @@ public:
 };
 
 // ------------------------- Pybind11 -------------------------
-PYBIND11_MODULE(mc_dagprop, m) {
+PYBIND11_MODULE(_core, m) {
     py::class_<SimulationTreeLink>(m, "SimulationTreeLink")
         .def(py::init<double,int>(), py::arg("minimal_duration"), py::arg("link_type"))
         .def_readwrite("minimal_duration", &SimulationTreeLink::minimal_duration)

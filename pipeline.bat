@@ -6,8 +6,7 @@ REM Delete old build artifacts
 del /q dist\*.*
 del /q build\*.*
 
-call python setup.py build_ext --inplace || exit /b
-call python -m build --wheel || exit /b
+call poetry build || exit /b
 
 for %%f in (dist\mc_dagprop*.whl) do (
     call pip install "%%f" --force-reinstall || exit /b
