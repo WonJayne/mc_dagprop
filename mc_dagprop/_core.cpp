@@ -1,3 +1,4 @@
+// mc_dagprop/_core.cpp
 #include <algorithm>
 #include <numeric>
 #include <pybind11/numpy.h>
@@ -15,42 +16,55 @@ namespace py = pybind11;
 namespace std {
     template <typename T1, typename T2>
     struct hash<std::pair<T1, T2>> {
-        size_t operator()(const std::pair<T1, T2>& p) const {
+        size_t operator()(const std::pair<T1, T2>& p) const noexcept {
             return std::hash<T1>{}(p.first) ^ (std::hash<T2>{}(p.second) << 1);
         }
     };
 }
 
 // ------------------------- Data Types -------------------------
-struct EventPointInTime {
-    double earliest, latest, actual;
+struct EventTimestamp {
+    double earliest;
+    double latest;
+    double actual;
 };
 
-struct SimulationTreeLink {
-    double minimal_duration;
-    int link_type;
+struct SimEvent {
+    std::string      node_id;
+    EventTimestamp   timestamp;
 };
 
-using NodeId = std::string;
-using LinkIndex = int;
-using NodeIndex = int;
+struct SimActivity {
+    double duration;
+    int    activity_type;
+};
+
+using NodeIndex  = int;
+using LinkIndex  = int;
 using Precedence = std::vector<std::pair<NodeIndex, LinkIndex>>;
 
+// ------------------------- Simulation Context -------------------------
 struct SimContext {
-    std::vector<std::pair<NodeId, EventPointInTime>> events;
-    std::unordered_map<std::pair<NodeIndex, NodeIndex>, std::pair<LinkIndex, SimulationTreeLink>> link_map;
-    std::vector<std::pair<NodeIndex, Precedence>> precedence_list;
-    double max_delay;
+    std::vector<SimEvent>                                        events;
+    std::unordered_map<std::pair<NodeIndex, NodeIndex>,
+                       std::pair<LinkIndex, SimActivity>>       activities;
+    std::vector<std::pair<NodeIndex, Precedence>>                precedence_list;
+    double                                                       max_delay;
 
     SimContext(
-        std::vector<std::pair<NodeId, EventPointInTime>> ev,
-        std::unordered_map<std::pair<NodeIndex, NodeIndex>, std::pair<LinkIndex, SimulationTreeLink>> lm,
+        std::vector<SimEvent> ev,
+        std::unordered_map<std::pair<NodeIndex, NodeIndex>, std::pair<LinkIndex, SimActivity>> am,
         std::vector<std::pair<NodeIndex, Precedence>> pl,
-        double max_delay_
-    ) : events(std::move(ev)), link_map(std::move(lm)), precedence_list(std::move(pl)), max_delay(max_delay_) {}
+        double md
+    )
+    : events(std::move(ev))
+    , activities(std::move(am))
+    , precedence_list(std::move(pl))
+    , max_delay(md)
+    {}
 };
 
-// ------------------------- SimResult -------------------------
+// ------------------------- Simulation Result -------------------------
 struct SimResult {
     std::vector<double> realized;
     std::vector<double> delays;
@@ -60,122 +74,128 @@ struct SimResult {
 // ------------------------- Delay Distributions -------------------------
 struct ConstantDist {
     double factor;
+    ConstantDist() : factor(0.0) {}
     ConstantDist(double f): factor(f) {}
-    double sample(std::mt19937& /*rng*/, double minimal_duration) const {
-        return minimal_duration * factor;
+    double sample(std::mt19937&, double duration) const {
+        return duration * factor;
     }
 };
 
 struct ExponentialDist {
-    double lambda;
-    double max_scale;
+    double lambda, max_scale;
     std::exponential_distribution<double> dist;
-    ExponentialDist(double lam, double max_s)
-      : lambda(lam), max_scale(max_s), dist(1.0/lam) {}
-    double sample(std::mt19937& rng, double minimal_duration) const {
+    ExponentialDist() : lambda(1.0), max_scale(1.0), dist(1.0) {}
+    ExponentialDist(double lam, double mx)
+      : lambda(lam), max_scale(mx), dist(1.0/lam)
+    {}
+    double sample(std::mt19937& rng, double duration) const {
         double x;
-        do {
-            x = dist(rng);
-        } while (x > max_scale);
-        return x * minimal_duration;
+        do { x = dist(rng); } while (x > max_scale);
+        return x * duration;
     }
 };
 
 // ------------------------- Generic Delay Generator -------------------------
 class GenericDelayGenerator {
-    std::mt19937 rng_;
-    using DistVariant = std::variant<ConstantDist, ExponentialDist>;
-    std::unordered_map<int, DistVariant> dist_map_;
+    std::mt19937                                      rng_;
+    using DistVar = std::variant<ConstantDist, ExponentialDist>;
+    std::unordered_map<int, DistVar>                  dist_map_;
 
 public:
-    GenericDelayGenerator(): rng_(std::random_device{}()) {}
+    GenericDelayGenerator()
+      : rng_(std::random_device{}())
+    {}
 
-    void inline set_seed(int seed) {
+    void set_seed(int seed) {
         rng_.seed(seed);
     }
 
-    void add_constant(int link_type, double factor) {
-        dist_map_.insert_or_assign(link_type, ConstantDist{factor});
+    void add_constant(int activity_type, double factor) {
+        dist_map_.insert_or_assign(activity_type, ConstantDist{factor});
     }
 
-    void add_exponential(int link_type, double lambda, double max_scale) {
-        dist_map_.insert_or_assign(link_type, ExponentialDist{lambda, max_scale});
+    void add_exponential(int activity_type, double lambda, double max_scale) {
+        dist_map_.insert_or_assign(activity_type, ExponentialDist{lambda, max_scale});
     }
 
-    double get_delay(const SimulationTreeLink& link) {
-        auto it = dist_map_.find(link.link_type);
+    double get_delay(const SimActivity& act) {
+        auto it = dist_map_.find(act.activity_type);
         if (it == dist_map_.end()) return 0.0;
-        return std::visit([&](auto& d) {
-            return d.sample(rng_, link.minimal_duration);
-        }, it->second);
+        return std::visit([&](auto &d){ return d.sample(rng_, act.duration); },
+                          it->second);
     }
 };
 
 // ------------------------- Simulator -------------------------
 class Simulator {
-    SimContext            context_;
-    GenericDelayGenerator generator_;
-    std::vector<SimulationTreeLink> links_;
-    std::vector<bool>               is_affected_;
-    std::vector<double>             durations_;
+    SimContext                ctx_;
+    GenericDelayGenerator     gen_;
+    std::vector<SimActivity>  acts_;
+    std::vector<bool>         is_affected_;
+    std::vector<double>       base_duration_;
 
 public:
-    Simulator(SimContext ctx, GenericDelayGenerator gen)
-      : context_(std::move(ctx)), generator_(std::move(gen)) {
-        int nlinks = (int)context_.link_map.size();
-        links_.resize(nlinks);
-        is_affected_.resize(nlinks, false);
-        durations_.resize(nlinks);
-        for (auto& kv : context_.link_map) {
+    Simulator(SimContext c, GenericDelayGenerator g)
+      : ctx_(std::move(c))
+      , gen_(std::move(g))
+    {
+        int n = int(ctx_.activities.size());
+        acts_.resize(n);
+        is_affected_.assign(n, false);
+        base_duration_.assign(n, 0.0);
+
+        for (auto& kv : ctx_.activities) {
             int idx = kv.second.first;
-            auto link = kv.second.second;
-            links_[idx]      = link;
-            is_affected_[idx] = (link.link_type == 1 && link.minimal_duration >= 0.01);
-            durations_[idx]   = link.minimal_duration;
+            SimActivity a = kv.second.second;
+            acts_[idx]        = a;
+            is_affected_[idx] = (a.activity_type==1 && a.duration>=0.01);
+            base_duration_[idx]= a.duration;
         }
     }
 
     SimResult run(int seed) {
-        generator_.set_seed(seed);
-        int ne = (int)context_.events.size();
-        int nl = (int)links_.size();
+        gen_.set_seed(seed);
+        int ne = int(ctx_.events.size());
+        int na = int(acts_.size());
 
         std::vector<double> lower(ne), scheduled(ne);
         for (int i = 0; i < ne; ++i) {
-            lower[i]     = context_.events[i].second.earliest;
-            scheduled[i] = context_.events[i].second.actual;
+            lower[i]     = ctx_.events[i].timestamp.earliest;
+            scheduled[i] = ctx_.events[i].timestamp.actual;
         }
 
-        std::vector<double> compounded(nl);
-        for (int i = 0; i < nl; ++i) {
-            compounded[i] = durations_[i] + (is_affected_[i] ? generator_.get_delay(links_[i]) : 0.0);
+        std::vector<double> compounded(na);
+        for (int i = 0; i < na; ++i) {
+            compounded[i] =
+                base_duration_[i] +
+                (is_affected_[i] ? gen_.get_delay(acts_[i]) : 0.0);
         }
 
         std::vector<double> realized = lower;
         std::vector<int>    cause_event(ne);
         std::iota(cause_event.begin(), cause_event.end(), 0);
 
-        for (auto& p : context_.precedence_list) {
-            int n_idx = p.first;
+        for (auto& p : ctx_.precedence_list) {
+            int node = p.first;
             auto& preds = p.second;
-            if (preds.size() == 1) {
-                int pi = preds[0].first, li = preds[0].second;
-                double d = realized[pi] + compounded[li];
-                if (d > realized[n_idx]) {
-                    realized[n_idx]   = d;
-                    cause_event[n_idx] = pi;
+            if (preds.size()==1) {
+                int pi = preds[0].first, ai = preds[0].second;
+                double t = realized[pi] + compounded[ai];
+                if (t > realized[node]) {
+                    realized[node]    = t;
+                    cause_event[node] = pi;
                 }
-            } else if (!preds.empty()) {
-                double maxd = -1e9;
-                int best = 0;
+            }
+            else if (!preds.empty()) {
+                double mx = -1e9; int bi=0;
                 for (int i = 0; i < (int)preds.size(); ++i) {
-                    int pi = preds[i].first, li = preds[i].second;
-                    double d = realized[pi] + compounded[li];
-                    if (d > maxd) { maxd = d; best = i; }
+                    int pi = preds[i].first, ai = preds[i].second;
+                    double t = realized[pi] + compounded[ai];
+                    if (t>mx) { mx=t; bi=i; }
                 }
-                if (maxd > realized[n_idx]) {
-                    realized[n_idx]   = maxd;
-                    cause_event[n_idx] = preds[best].first;
+                if (mx > realized[node]) {
+                    realized[node]    = mx;
+                    cause_event[node] = preds[bi].first;
                 }
             }
         }
@@ -184,52 +204,74 @@ public:
     }
 
     std::vector<SimResult> run_many(const std::vector<int>& seeds) {
-        std::vector<SimResult> results;
-        results.reserve(seeds.size());
-        for (int s : seeds) results.push_back(run(s));
-        return results;
+        std::vector<SimResult> out;
+        out.reserve(seeds.size());
+        for (int s : seeds) out.push_back(run(s));
+        return out;
     }
 };
 
-// ------------------------- Pybind11 -------------------------
+// ------------------------- Pybind11 Exports -------------------------
 PYBIND11_MODULE(_core, m) {
-    py::class_<SimulationTreeLink>(m, "SimulationTreeLink")
-        .def(py::init<double,int>(), py::arg("minimal_duration"), py::arg("link_type"))
-        .def_readwrite("minimal_duration", &SimulationTreeLink::minimal_duration)
-        .def_readwrite("link_type", &SimulationTreeLink::link_type);
+    m.doc() = "Core Monte?Carlo DAG?propagation simulator";
 
+    // EventTimestamp
+    py::class_<EventTimestamp>(m, "EventTimestamp")
+        .def(py::init<double,double,double>(),
+             py::arg("earliest"),
+             py::arg("latest"),
+             py::arg("actual"))
+        .def_readwrite("earliest", &EventTimestamp::earliest)
+        .def_readwrite("latest",   &EventTimestamp::latest)
+        .def_readwrite("actual",   &EventTimestamp::actual);
+
+    // SimEvent
+    py::class_<SimEvent>(m, "SimEvent")
+        .def(py::init<std::string, EventTimestamp>(),
+             py::arg("node_id"), py::arg("timestamp"))
+        .def_readwrite("node_id",   &SimEvent::node_id)
+        .def_readwrite("timestamp", &SimEvent::timestamp);
+
+    // SimActivity
+    py::class_<SimActivity>(m, "SimActivity")
+        .def(py::init<double,int>(),
+             py::arg("duration"), py::arg("activity_type"))
+        .def_readwrite("duration",      &SimActivity::duration)
+        .def_readwrite("activity_type", &SimActivity::activity_type);
+
+    // SimContext
     py::class_<SimContext>(m, "SimContext")
-        .def(py::init([](
-            const std::vector<std::pair<std::string,std::tuple<double,double,double>>>& events_raw,
-            const std::unordered_map<std::pair<int,int>,std::pair<int,SimulationTreeLink>>& link_map,
-            const std::vector<std::pair<int,std::vector<std::pair<int,int>>>>& precedence_list,
-            double max_delay
-        ) {
-            std::vector<std::pair<NodeId,EventPointInTime>> ev;
-            ev.reserve(events_raw.size());
-            for (auto &e : events_raw)
-                ev.emplace_back(e.first,
-                    EventPointInTime{std::get<0>(e.second),std::get<1>(e.second),std::get<2>(e.second)});
-            return SimContext(std::move(ev), link_map, precedence_list, max_delay);
-        }), py::arg("events"), py::arg("link_map"), py::arg("precedence_list"), py::arg("max_delay"))
-        .def_readwrite("events", &SimContext::events)
-        .def_readwrite("link_map", &SimContext::link_map)
+        .def(py::init<
+            std::vector<SimEvent>,
+            std::unordered_map<std::pair<int,int>,std::pair<int,SimActivity>>,
+            std::vector<std::pair<int,Precedence>>,
+            double>(),
+          py::arg("events"),
+          py::arg("activities"),
+          py::arg("precedence_list"),
+          py::arg("max_delay"))
+        .def_readwrite("events",          &SimContext::events)
+        .def_readwrite("activities",      &SimContext::activities)
         .def_readwrite("precedence_list", &SimContext::precedence_list)
-        .def_readwrite("max_delay", &SimContext::max_delay);
+        .def_readwrite("max_delay",       &SimContext::max_delay);
 
+    // SimResult
     py::class_<SimResult>(m, "SimResult")
-        .def_readonly("realized", &SimResult::realized)
-        .def_readonly("delays", &SimResult::delays)
+        .def_readonly("realized",    &SimResult::realized)
+        .def_readonly("delays",      &SimResult::delays)
         .def_readonly("cause_event", &SimResult::cause_event);
 
+    // GenericDelayGenerator
     py::class_<GenericDelayGenerator>(m, "GenericDelayGenerator")
         .def(py::init<>())
-        .def("add_constant", &GenericDelayGenerator::add_constant, py::arg("link_type"), py::arg("factor"))
-        .def("add_exponential", &GenericDelayGenerator::add_exponential, py::arg("link_type"), py::arg("lambda"), py::arg("max_scale"))
-        .def("set_seed", &GenericDelayGenerator::set_seed, py::arg("seed"));
+        .def("set_seed",        &GenericDelayGenerator::set_seed,        py::arg("seed"))
+        .def("add_constant",    &GenericDelayGenerator::add_constant,    py::arg("activity_type"), py::arg("factor"))
+        .def("add_exponential", &GenericDelayGenerator::add_exponential, py::arg("activity_type"), py::arg("lambda"), py::arg("max_scale"));
 
+    // Simulator
     py::class_<Simulator>(m, "Simulator")
-        .def(py::init<SimContext, GenericDelayGenerator>(), py::arg("context"), py::arg("generator"))
-        .def("run", &Simulator::run, py::arg("seed"))
+        .def(py::init<SimContext, GenericDelayGenerator>(),
+             py::arg("context"), py::arg("generator"))
+        .def("run",       &Simulator::run,      py::arg("seed"))
         .def("run_many", &Simulator::run_many, py::arg("seeds"));
 }

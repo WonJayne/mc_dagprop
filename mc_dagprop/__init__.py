@@ -1,3 +1,3 @@
-from ._core import GenericDelayGenerator, SimContext, SimResult, SimulationTreeLink, Simulator
+from ._core import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, SimResult, Simulator
 
-__all__ = ["SimulationTreeLink", "SimContext", "SimResult", "GenericDelayGenerator", "Simulator"]
+__all__ = ["GenericDelayGenerator", "SimContext", "SimResult", "SimEvent", "SimActivity", "Simulator", "EventTimestamp"]

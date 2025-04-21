@@ -1,29 +1,32 @@
 import unittest
 
-from mc_dagprop import GenericDelayGenerator, SimContext, SimulationTreeLink, Simulator
+from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
 
 
 class TestSimulator(unittest.TestCase):
     def setUp(self):
-        self.events = [("0", (0.0, 100.0, 0.0)), ("1", (5.0, 100.0, 0.0)), ("2", (10.0, 100.0, 0.0))]
+        self.events = [
+            SimEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
+            SimEvent("1", EventTimestamp(5.0, 100.0, 0.0)),
+            SimEvent("2", EventTimestamp(10.0, 100.0, 0.0)),
+        ]
 
-        # 2 links: (src, dst) ? (link_index, SimulationTreeLink)
-        self.link_map = {(0, 1): (0, SimulationTreeLink(3.0, 1)), (1, 2): (1, SimulationTreeLink(5.0, 1))}
+        # 2 links: (src, dst) ? (link_index, SimActivity)
+        self.link_map = {(0, 1): (0, SimActivity(3.0, 1)), (1, 2): (1, SimActivity(5.0, 1))}
 
         # Precedence: node_idx ? [(pred_idx, link_idx)]
         self.precedence_list = [(1, [(0, 0)]), (2, [(1, 1)])]
 
         self.context = SimContext(
-            events=self.events, link_map=self.link_map, precedence_list=self.precedence_list, max_delay=10.0
+            events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0
         )
 
     def test_constant_via_generic(self):
         # Constant factor = 2.0 for link_type==1
         gen = GenericDelayGenerator()
-        gen.add_constant(link_type=1, factor=1.0)
+        gen.add_constant(activity_type=1, factor=1.0)
         sim = Simulator(self.context, gen)
 
-        # single-run
         res = sim.run(seed=7)
         r = tuple(res.realized)
         d = tuple(res.delays)
@@ -33,10 +36,6 @@ class TestSimulator(unittest.TestCase):
         for b in batch:
             self.assertIsInstance(b, type(res))
 
-        # expected:
-        # Node0 = 0
-        # Node1 = 10 (earliest) + 3*2 = 16
-        # Node2 = 16           + 5*2 = 26
         self.assertAlmostEqual(r[1], 6.0, places=6)
         self.assertAlmostEqual(r[2], 16.0, places=6)
 
@@ -52,7 +51,6 @@ class TestSimulator(unittest.TestCase):
         # generate multiple runs, see they produce non-negative delays <= max_scale*duration
         results = sim.run_many((range(3)))
 
-        delays = [5.695681166393335, 5.695681166393335, 5.695681166393335]
         for idx, res in enumerate(results):
             r = list(res.realized)
             deltas = list(res.delays)
