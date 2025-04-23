@@ -11,8 +11,8 @@ class TestSimulator(unittest.TestCase):
             SimEvent("2", EventTimestamp(10.0, 100.0, 0.0)),
         ]
 
-        # 2 links: (src, dst) ? (link_index, SimActivity)
-        self.link_map = {(0, 1): (0, SimActivity(3.0, 1)), (1, 2): (1, SimActivity(5.0, 1))}
+        # 2 links: (src, dst) ? SimActivity)
+        self.link_map = {(0, 1): (SimActivity(3.0, 1)), (1, 2): (SimActivity(5.0, 1))}
 
         # Precedence: node_idx ? [(pred_idx, link_idx)]
         self.precedence_list = [(1, [(0, 0)]), (2, [(1, 1)])]

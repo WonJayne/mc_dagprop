@@ -46,7 +46,7 @@ class SimContext:
     def __init__(
         self,
         events: Sequence[SimEvent],
-        activities: Mapping[tuple[int, int], tuple[int, SimActivity]],
+        activities: Mapping[tuple[int, int], SimActivity],
         precedence_list: Sequence[tuple[int, list[tuple[int, int]]]],
         max_delay: float,
     ) -> None: ...
@@ -69,6 +69,7 @@ class GenericDelayGenerator:
     def set_seed(self, seed: int) -> None: ...
     def add_constant(self, activity_type: int, factor: float) -> None: ...
     def add_exponential(self, activity_type: int, lambda_: float, max_scale: float) -> None: ...
+    def add_gamma(self, activity_type: int, shape: float, scale: float) -> None: ...
 
 class Simulator:
     """

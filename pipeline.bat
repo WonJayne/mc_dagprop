@@ -12,4 +12,9 @@ for %%f in (dist\mc_dagprop*.whl) do (
     call pip install "%%f" --force-reinstall || exit /b
 )
 
+pip install numpy || exit /b
+pip install plotly || exit /b
+
+python mc_dagprop\utils\demo_distributions.py || exit /b
+
 python test\test_simulator.py || exit /b
