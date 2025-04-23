@@ -1,234 +1,213 @@
 // mc_dagprop/_core.cpp
-
-#include <algorithm>
-#include <numeric>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <numeric>
 #include <random>
 #include <string>
 #include <unordered_map>
-#include <vector>
 #include <variant>
-#include <limits>
+#include <vector>
 
+using namespace std;
 namespace py = pybind11;
 
-// ------------------------- Custom Hash for pair -------------------------
-namespace std {
-    template <typename T1, typename T2>
-    struct hash<std::pair<T1, T2>> {
-        size_t operator()(const std::pair<T1, T2>& p) const noexcept {
-            return std::hash<T1>{}(p.first) ^ (std::hash<T2>{}(p.second) << 1);
-        }
-    };
-}
+// Bring your alias into scope for pybind:
+using NodeIndex = int;
+using EdgeIndex = int;
+using Preds = vector<pair<NodeIndex, EdgeIndex>>;
 
-// ------------------------- Data Types -------------------------
+// ─── custom hash for pair ─────────────────────────────────────────────
+namespace std {
+template <typename A, typename B>
+struct hash<pair<A, B>> {
+    size_t operator()(pair<A, B> const& p) const noexcept { return hash<A>{}(p.first) ^ (hash<B>{}(p.second) << 1); }
+};
+}  // namespace std
+
+// ─── data types ────────────────────────────────────────────────────────
 struct EventTimestamp {
     double earliest, latest, actual;
 };
 
 struct SimEvent {
-    std::string    node_id;
-    EventTimestamp timestamp;
+    std::string node_id;
+    EventTimestamp ts;
 };
 
 struct SimActivity {
     double duration;
-    int    activity_type;
+    int activity_type;
 };
 
-using NodeIndex  = int;
-using Precedence = std::vector<std::pair<NodeIndex, NodeIndex>>; // (pred_event_idx, activity_idx)
-
-// ------------------------- Simulation Context -------------------------
+// ─── simulation context ───────────────────────────────────────────────
 struct SimContext {
-    std::vector<SimEvent> events;
-    std::unordered_map<std::pair<NodeIndex, NodeIndex>, SimActivity> activities;
-    std::vector<std::pair<NodeIndex, Precedence>> precedence_list;
+    vector<SimEvent> events;
+    unordered_map<pair<NodeIndex, NodeIndex>, SimActivity> activities;
+    vector<pair<NodeIndex, Preds>> precedence_list;
     double max_delay;
 
-    SimContext(
-        std::vector<SimEvent> ev,
-        std::unordered_map<std::pair<NodeIndex, NodeIndex>, SimActivity> am,
-        std::vector<std::pair<NodeIndex, Precedence>> pl,
-        double md
-    )
-      : events(std::move(ev))
-      , activities(std::move(am))
-      , precedence_list(std::move(pl))
-      , max_delay(md)
-    {}
+    SimContext(vector<SimEvent> ev, unordered_map<pair<NodeIndex, NodeIndex>, SimActivity> am,
+               vector<pair<NodeIndex, Preds>> pl, double md)
+        : events(move(ev)), activities(move(am)), precedence_list(move(pl)), max_delay(md) {}
 };
 
-// ------------------------- Simulation Result -------------------------
+// ─── simulation result ────────────────────────────────────────────────
 struct SimResult {
-    std::vector<double> realized;
-    std::vector<double> delays;
-    std::vector<int>    cause_event;
+    vector<double> realized;
+    vector<double> delays;
+    vector<int> cause;
 };
 
-// ------------------------- Delay Distributions -------------------------
+// ─── distributions ────────────────────────────────────────────────────
 struct ConstantDist {
     double factor;
-    ConstantDist(): factor(0.0) {}
-    ConstantDist(double f): factor(f) {}
-    double sample(std::mt19937&, double d) const { return d * factor; }
+    ConstantDist(double f = 0.0) : factor(f) {}
+    double sample(mt19937&, double d) const { return d * factor; }
 };
 
 struct ExponentialDist {
-    double lambda, max_scale;
-    std::exponential_distribution<double> dist;
-    ExponentialDist(): lambda(1.0), max_scale(1.0), dist(1.0) {}
-    ExponentialDist(double lam, double mx)
-      : lambda(lam), max_scale(mx), dist(1.0/lam)
-    {}
-    double sample(std::mt19937& rng, double d) const {
+    double lam, max_scale;
+    exponential_distribution<double> dist;
+    ExponentialDist(double l = 1.0, double m = 1.0) : lam(l), max_scale(m), dist(1.0 / l) {}
+    double sample(mt19937& rng, double d) const {
         double x;
-        do { x = dist(rng); } while (x > max_scale);
+        do {
+            x = dist(rng);
+        } while (x > max_scale);
         return x * d;
     }
 };
 
-// **new**: Gamma distribution with optional max_scale
 struct GammaDist {
     double shape, scale, max_scale;
-    std::gamma_distribution<double> dist;
-    GammaDist()
-      : shape(1.0),
-        scale(1.0),
-        max_scale(std::numeric_limits<double>::infinity()),
-        dist(1.0,1.0)
-    {}
-    GammaDist(double k, double a, double mx = std::numeric_limits<double>::infinity())
-      : shape(k),
-        scale(a),
-        max_scale(mx),
-        dist(k, a)
-    {}
-    double sample(std::mt19937& rng, double d) const {
+    gamma_distribution<double> dist;
+    GammaDist(double k = 1.0, double s = 1.0, double m = numeric_limits<double>::infinity())
+        : shape(k), scale(s), max_scale(m), dist(k, s) {}
+    double sample(mt19937& rng, double d) const {
         double x;
-        do { x = dist(rng); } while(x > max_scale);
+        do {
+            x = dist(rng);
+        } while (x > max_scale);
         return x * d;
     }
 };
 
-// ------------------------- Generic Delay Generator -------------------------
+// ─── generic delay generator ──────────────────────────────────────────
+using DistVar = variant<ConstantDist, ExponentialDist, GammaDist>;
 class GenericDelayGenerator {
-    std::mt19937 rng_;
-    using DistVar = std::variant<ConstantDist, ExponentialDist, GammaDist>;
-    std::unordered_map<int, DistVar> dist_map_;
+   public:
+    mt19937 rng_;
+    unordered_map<int, DistVar> dist_map_;
 
-public:
-    GenericDelayGenerator()
-      : rng_(std::random_device{}())
-    {}
-
-    void set_seed(int seed) {
-        rng_.seed(seed);
-    }
-
-    void add_constant(int activity_type, double factor) {
-        dist_map_.insert_or_assign(activity_type, ConstantDist{factor});
-    }
-
-    void add_exponential(int activity_type, double lambda, double max_scale) {
-        dist_map_.insert_or_assign(activity_type, ExponentialDist{lambda, max_scale});
-    }
-
-    /// gamma(shape, scale, max_scale)
-    void add_gamma(int activity_type, double shape, double scale,
-                   double max_scale = std::numeric_limits<double>::infinity())
-    {
-        dist_map_.insert_or_assign(activity_type, GammaDist{shape, scale, max_scale});
-    }
-
-    double get_delay(const SimActivity& act) {
-        auto it = dist_map_.find(act.activity_type);
-        if (it == dist_map_.end()) return 0.0;
-        return std::visit([&](auto& d){
-            return d.sample(rng_, act.duration);
-        }, it->second);
+    GenericDelayGenerator() : rng_(random_device{}()) {}
+    void set_seed(int s) { rng_.seed(s); }
+    void add_constant(int t, double f) { dist_map_[t] = ConstantDist{f}; }
+    void add_exponential(int t, double l, double m) { dist_map_[t] = ExponentialDist{l, m}; }
+    void add_gamma(int t, double k, double s, double m = numeric_limits<double>::infinity()) {
+        dist_map_[t] = GammaDist{k, s, m};
     }
 };
 
-// ------------------------- Simulator -------------------------
+// ─── simulator ────────────────────────────────────────────────────────
 class Simulator {
-    SimContext            ctx_;
-    GenericDelayGenerator gen_;
+    SimContext ctx_;
+    std::vector<DistVar> dists_;
     std::vector<SimActivity> acts_;
-    std::vector<bool>        is_affected_;
-    std::vector<double>      base_dur_;
+    std::vector<int> act2dist_;
+    std::mt19937 rng_;
+    std::vector<Preds> preds_by_node_;
 
-public:
-    Simulator(SimContext c, GenericDelayGenerator g)
-      : ctx_(std::move(c))
-      , gen_(std::move(g))
-    {
-        int n = int(ctx_.activities.size());
-        acts_.resize(n);
-        is_affected_.assign(n, false);
-        base_dur_.assign(n, 0.0);
+    // scratch buffers
+    std::vector<double> lower_, sched_, comp_, real_;
+    std::vector<int> cause_;
 
-        int idx = 0;
-        for (auto& kv : ctx_.activities) {
-            acts_[idx]        = kv.second;
-            is_affected_[idx] = (kv.second.activity_type == 1 && kv.second.duration >= 0.001);
-            base_dur_[idx]    = kv.second.duration;
-            ++idx;
+   public:
+    Simulator(SimContext c, GenericDelayGenerator gen) : ctx_(std::move(c)), rng_(std::random_device{}()) {
+        // 1) build type→index & flatten distributions
+        std::unordered_map<int, int> type2idx;
+        dists_.reserve(gen.dist_map_.size());
+        {
+            int idx = 0;
+            for (auto& kv : gen.dist_map_) {
+                type2idx[kv.first] = idx;
+                dists_.push_back(kv.second);
+                ++idx;
+            }
         }
+
+        // 2) flatten activities + record their dist index
+        acts_.reserve(ctx_.activities.size());
+        act2dist_.reserve(ctx_.activities.size());
+        for (auto& kv : ctx_.activities) {
+            acts_.push_back(kv.second);
+            auto it = type2idx.find(kv.second.activity_type);
+            act2dist_.push_back(it == type2idx.end() ? -1 : it->second);
+        }
+
+        // 3) build preds_by_node_ from precedence_list
+        int ne = int(ctx_.events.size());
+        preds_by_node_.assign(ne, {});
+        for (auto& p : ctx_.precedence_list) {
+            auto& vec = preds_by_node_[p.first];
+            for (auto& pr : p.second) vec.push_back(pr);
+        }
+
+        // 4) allocate scratch buffers
+        int na = int(acts_.size());
+        lower_.resize(ne);
+        sched_.resize(ne);
+        real_.resize(ne);
+        cause_.resize(ne);
+        comp_.resize(na);
     }
 
     SimResult run(int seed) {
-        gen_.set_seed(seed);
-        int ne = int(ctx_.events.size());
-        int na = int(acts_.size());
+        // seed RNG
+        rng_.seed(seed);
 
-        std::vector<double> lower(ne), scheduled(ne);
-        for (auto i = 0; i < ne; ++i) {
-            lower[i]     = ctx_.events[i].timestamp.earliest;
-            scheduled[i] = ctx_.events[i].timestamp.actual;
+        int ne = int(lower_.size());
+        int na = int(comp_.size());
+
+        // load earliest & actual
+        for (int i = 0; i < ne; ++i) {
+            lower_[i] = ctx_.events[i].ts.earliest;
+            sched_[i] = ctx_.events[i].ts.actual;
         }
 
-        std::vector<double> compounded(na);
-        for (auto i = 0; i < na; ++i) {
-            compounded[i] =
-              base_dur_[i] +
-              (is_affected_[i] ? gen_.get_delay(acts_[i]) : 0.0);
+        // sample + compound durations
+        for (int i = 0; i < na; ++i) {
+            const auto& act = acts_[i];
+            int di = act2dist_[i];
+            double extra = 0.0;
+            if (di >= 0) {
+                extra = std::visit([&](auto& d) { return d.sample(rng_, act.duration); }, dists_[di]);
+            }
+            comp_[i] = act.duration + extra;
         }
 
-        std::vector<double> realized = lower;
-        std::vector<int>    cause_event(ne);
-        std::iota(cause_event.begin(), cause_event.end(), 0);
+        // init propagate
+        std::copy(lower_.begin(), lower_.end(), real_.begin());
+        std::iota(cause_.begin(), cause_.end(), 0);
 
-        for (auto& p : ctx_.precedence_list) {
-            int node = p.first;
-            auto& preds = p.second;
-            if (preds.size() == 1) {
-                int pi = preds[0].first, ai = preds[0].second;
-                double t = realized[pi] + compounded[ai];
-                if (t > realized[node]) {
-                    realized[node]    = t;
-                    cause_event[node] = pi;
-                }
-            } else if (!preds.empty()) {
-                double mx = -1e9; int bi = 0;
-                for (auto i = 0; i < int(preds.size()); ++i) {
-                    int pi = preds[i].first, ai = preds[i].second;
-                    double t = realized[pi] + compounded[ai];
-                    if (t > mx) { mx = t; bi = i; }
-                }
-                if (mx > realized[node]) {
-                    realized[node]    = mx;
-                    cause_event[node] = preds[bi].first;
+        // propagate through preds_by_node_
+        for (int node = 0; node < ne; ++node) {
+            for (auto& pr : preds_by_node_[node]) {
+                int pred_idx = pr.first;
+                int act_idx = pr.second;
+                double t = real_[pred_idx] + comp_[act_idx];
+                if (t > real_[node]) {
+                    real_[node] = t;
+                    cause_[node] = pred_idx;
                 }
             }
         }
 
-        return SimResult{std::move(realized),
-                         std::move(compounded),
-                         std::move(cause_event)};
+        return SimResult{real_, comp_, cause_};
     }
 
     std::vector<SimResult> run_many(const std::vector<int>& seeds) {
@@ -239,93 +218,66 @@ public:
     }
 };
 
-// ------------------------- Pybind11 Exports -------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 PYBIND11_MODULE(_core, m) {
     m.doc() = "Core Monte-Carlo DAG-propagation simulator";
 
     // EventTimestamp
     py::class_<EventTimestamp>(m, "EventTimestamp")
-        .def(py::init<double,double,double>(),
-             py::arg("earliest"), py::arg("latest"), py::arg("actual"))
-        .def_readwrite("earliest", &EventTimestamp::earliest)
-        .def_readwrite("latest",   &EventTimestamp::latest)
-        .def_readwrite("actual",   &EventTimestamp::actual)
-        ;
+        .def(py::init<double, double, double>(), py::arg("earliest"), py::arg("latest"), py::arg("actual"),
+             "Create an event timestamp (earliest, latest, actual).")
+        .def_readwrite("earliest", &EventTimestamp::earliest, "Earliest bound")
+        .def_readwrite("latest", &EventTimestamp::latest, "Latest bound")
+        .def_readwrite("actual", &EventTimestamp::actual, "Scheduled time");
 
     // SimEvent
     py::class_<SimEvent>(m, "SimEvent")
-        .def(py::init<std::string,EventTimestamp>(),
-             py::arg("id"), py::arg("timestamp"))
-        .def_readwrite("node_id",   &SimEvent::node_id)
-        .def_readwrite("timestamp", &SimEvent::timestamp)
-        ;
+        .def(py::init<std::string, EventTimestamp>(), py::arg("node_id"), py::arg("timestamp"),
+             "An event node with its ID and timestamp")
+        .def_readwrite("node_id", &SimEvent::node_id, "Node identifier")
+        .def_readwrite("timestamp", &SimEvent::ts, "Event timing info");
 
-    // SimActivity (minimal_duration + activity_type)
+    // SimActivity
     py::class_<SimActivity>(m, "SimActivity")
-        .def(py::init<double,int>(),
-             py::arg("minimal_duration"), py::arg("activity_type"))
-        .def_readwrite("duration",      &SimActivity::duration)
-        .def_readwrite("activity_type", &SimActivity::activity_type)
-        ;
+        .def(py::init<double, int>(), py::arg("minimal_duration"), py::arg("activity_type"),
+             "An activity (edge) with base duration and type")
+        .def_readwrite("minimal_duration", &SimActivity::duration, "Base duration")
+        .def_readwrite("activity_type", &SimActivity::activity_type, "Type ID for delay distribution");
 
     // SimContext
     py::class_<SimContext>(m, "SimContext")
-        .def(py::init<
-            std::vector<SimEvent>,
-            std::unordered_map<std::pair<int,int>,SimActivity>,
-            std::vector<std::pair<int,Precedence>>,
-            double>(),
-             py::arg("events"),
-             py::arg("activities"),
-             py::arg("precedence_list"),
-             py::arg("max_delay"))
-        .def_readwrite("events",          &SimContext::events)
-        .def_readwrite("activities",      &SimContext::activities)
-        .def_readwrite("precedence_list", &SimContext::precedence_list)
-        .def_readwrite("max_delay",       &SimContext::max_delay)
-        ;
+        .def(py::init<std::vector<SimEvent>, std::unordered_map<std::pair<int, int>, SimActivity>,
+                      std::vector<std::pair<int, Preds>>, double>(),
+             py::arg("events"), py::arg("activities"), py::arg("precedence_list"), py::arg("max_delay"),
+             "Wraps a DAG: events, activities map, precedence, max delay")
+        .def_readwrite("events", &SimContext::events, "List of SimEvent")
+        .def_readwrite("activities", &SimContext::activities, "Map (src_idx,dst_idx)→SimActivity")
+        .def_readwrite("precedence_list", &SimContext::precedence_list,
+                       "List of (target_idx, [(pred_idx, act_idx),...])")
+        .def_readwrite("max_delay", &SimContext::max_delay, "Cap on any injected delay");
 
-    // SimResult ? real numpy arrays (copies data into fresh buffers)
+    // SimResult
     py::class_<SimResult>(m, "SimResult")
-        .def_property_readonly("realized", [](const SimResult &r) {
-            // allocate a new 1-D double array
-            py::array_t<double> arr(r.realized.size());
-            std::memcpy(arr.mutable_data(),
-                        r.realized.data(),
-                        sizeof(double) * r.realized.size());
-            return arr;
-        })
-        .def_property_readonly("delays", [](const SimResult &r) {
-            py::array_t<double> arr(r.delays.size());
-            std::memcpy(arr.mutable_data(),
-                        r.delays.data(),
-                        sizeof(double) * r.delays.size());
-            return arr;
-        })
-        .def_property_readonly("cause_event", [](const SimResult &r) {
-            // use int for your predecessor indices
-            py::array_t<int> arr(r.cause_event.size());
-            std::memcpy(arr.mutable_data(),
-                        r.cause_event.data(),
-                        sizeof(int) * r.cause_event.size());
-            return arr;
-        });
+        .def_readonly("realized", &SimResult::realized, "Realized event times after propagation")
+        .def_readonly("delays", &SimResult::delays, "Injected delays per activity")
+        .def_readonly("cause_event", &SimResult::cause, "Index of predecessor causing each event");
 
     // GenericDelayGenerator
     py::class_<GenericDelayGenerator>(m, "GenericDelayGenerator")
-        .def(py::init<>())
-        .def("set_seed",        &GenericDelayGenerator::set_seed,        py::arg("seed"))
-        .def("add_constant",    &GenericDelayGenerator::add_constant,    py::arg("activity_type"), py::arg("factor"))
-        .def("add_exponential", &GenericDelayGenerator::add_exponential, py::arg("activity_type"), py::arg("lambda_"),   py::arg("max_scale"))
-        .def("add_gamma",       &GenericDelayGenerator::add_gamma,       py::arg("activity_type"), py::arg("shape"),     py::arg("scale"),
-                                                                  py::arg("max_scale") = std::numeric_limits<double>::infinity())
-        ;
+        .def(py::init<>(), "Create a new delay generator")
+        .def("set_seed", &GenericDelayGenerator::set_seed, py::arg("seed"), "Set RNG seed for reproducibility")
+        .def("add_constant", &GenericDelayGenerator::add_constant, py::arg("activity_type"), py::arg("factor"),
+             "Constant: delay = factor × duration")
+        .def("add_exponential", &GenericDelayGenerator::add_exponential, py::arg("activity_type"), py::arg("lambda_"),
+             py::arg("max_scale"), "Exponential(λ) with cutoff at max_scale")
+        .def("add_gamma", &GenericDelayGenerator::add_gamma, py::arg("activity_type"), py::arg("shape"),
+             py::arg("scale"), py::arg("max_scale") = std::numeric_limits<double>::infinity(),
+             "Gamma(shape, scale) truncated at max_scale");
 
     // Simulator
     py::class_<Simulator>(m, "Simulator")
-        .def(py::init<SimContext,GenericDelayGenerator>(),
-             py::arg("context"), py::arg("generator"))
-        .def("run",      &Simulator::run,      py::arg("seed"))
-        .def("run_many", &Simulator::run_many, py::arg("seeds"))
-        ;
+        .def(py::init<SimContext, GenericDelayGenerator>(), py::arg("context"), py::arg("generator"),
+             "Construct simulator with context and delay generator")
+        .def("run", &Simulator::run, py::arg("seed"), "Run a single simulation (seeded)")
+        .def("run_many", &Simulator::run_many, py::arg("seeds"), "Run batch of simulations");
 }
