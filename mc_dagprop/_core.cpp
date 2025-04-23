@@ -186,13 +186,13 @@ public:
         int na = int(acts_.size());
 
         std::vector<double> lower(ne), scheduled(ne);
-        for (int i = 0; i < ne; ++i) {
+        for (auto i = 0; i < ne; ++i) {
             lower[i]     = ctx_.events[i].timestamp.earliest;
             scheduled[i] = ctx_.events[i].timestamp.actual;
         }
 
         std::vector<double> compounded(na);
-        for (int i = 0; i < na; ++i) {
+        for (auto i = 0; i < na; ++i) {
             compounded[i] =
               base_dur_[i] +
               (is_affected_[i] ? gen_.get_delay(acts_[i]) : 0.0);
@@ -214,7 +214,7 @@ public:
                 }
             } else if (!preds.empty()) {
                 double mx = -1e9; int bi = 0;
-                for (int i = 0; i < int(preds.size()); ++i) {
+                for (auto i = 0; i < int(preds.size()); ++i) {
                     int pi = preds[i].first, ai = preds[i].second;
                     double t = realized[pi] + compounded[ai];
                     if (t > mx) { mx = t; bi = i; }
@@ -285,12 +285,31 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("max_delay",       &SimContext::max_delay)
         ;
 
-    // SimResult
+    // SimResult ? real numpy arrays (copies data into fresh buffers)
     py::class_<SimResult>(m, "SimResult")
-        .def_readonly("realized",    &SimResult::realized)
-        .def_readonly("delays",      &SimResult::delays)
-        .def_readonly("cause_event", &SimResult::cause_event)
-        ;
+        .def_property_readonly("realized", [](const SimResult &r) {
+            // allocate a new 1-D double array
+            py::array_t<double> arr(r.realized.size());
+            std::memcpy(arr.mutable_data(),
+                        r.realized.data(),
+                        sizeof(double) * r.realized.size());
+            return arr;
+        })
+        .def_property_readonly("delays", [](const SimResult &r) {
+            py::array_t<double> arr(r.delays.size());
+            std::memcpy(arr.mutable_data(),
+                        r.delays.data(),
+                        sizeof(double) * r.delays.size());
+            return arr;
+        })
+        .def_property_readonly("cause_event", [](const SimResult &r) {
+            // use int for your predecessor indices
+            py::array_t<int> arr(r.cause_event.size());
+            std::memcpy(arr.mutable_data(),
+                        r.cause_event.data(),
+                        sizeof(int) * r.cause_event.size());
+            return arr;
+        });
 
     // GenericDelayGenerator
     py::class_<GenericDelayGenerator>(m, "GenericDelayGenerator")

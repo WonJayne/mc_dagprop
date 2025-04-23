@@ -1,6 +1,9 @@
 # mc_dagprop/_core.pyi
-from collections.abc import Sequence
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
+
+import numpy as np
+from numpy._typing import NDArray
+
 
 class SimEvent:
     """
@@ -56,9 +59,9 @@ class SimResult:
     The result of one run: realized times, per-activity delays, and causal predecessors.
     """
 
-    realized: list[float]
-    delays: list[float]
-    cause_event: list[int]
+    realized: NDArray[float]
+    delays: NDArray[float]
+    cause_event: NDArray[int]
 
 class GenericDelayGenerator:
     """

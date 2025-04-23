@@ -42,6 +42,10 @@ class TestSimulator(unittest.TestCase):
         # delays array length == #links
         self.assertEqual(len(d), 2)
 
+        self.assertEqual(res.cause_event[0], 0)
+        self.assertEqual(res.cause_event[1], 0)
+        self.assertEqual(res.cause_event[2], 1)
+
     def test_exponential_via_generic(self):
         gen = GenericDelayGenerator()
         # exponential on link_type==1: lambda=1.0, max_scale=10.0

@@ -1,11 +1,17 @@
 [project]
 name = "mc-dagprop"
-version = "0.1.8"
+version = "0.1.11"
 description = "Fast, Monte Carlo DAG propagation simulator with user‑defined delay distributions"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" }
 ]
 requires-python = ">=3.12"
+readme = "README.md"
+license = { file = "LICENSE" }
+
+[tool.poetry.dependencies]
+numpy = "^2.0.0"
+
 
 [build-system]
 requires = [
@@ -131,3 +137,4 @@ exclude-protected = "_asdict,_fields,_replace,_source,_make"
 
 [tool.pylint.exceptions]
 overgeneral-exceptions = "Exception"
+
