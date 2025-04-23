@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 #include <variant>
+#include <limits>
 
 namespace py = pybind11;
 
@@ -24,20 +25,15 @@ namespace std {
 }
 
 // ------------------------- Data Types -------------------------
-// renamed from SimEvent ? EventTimestamp
 struct EventTimestamp {
-    double earliest;
-    double latest;
-    double actual;
+    double earliest, latest, actual;
 };
 
-// an Event in the DAG
 struct SimEvent {
     std::string    node_id;
     EventTimestamp timestamp;
 };
 
-// an Activity (edge) in the DAG
 struct SimActivity {
     double duration;
     int    activity_type;
@@ -48,16 +44,16 @@ using Precedence = std::vector<std::pair<NodeIndex, NodeIndex>>; // (pred_event_
 
 // ------------------------- Simulation Context -------------------------
 struct SimContext {
-    std::vector<SimEvent>                                events;
+    std::vector<SimEvent> events;
     std::unordered_map<std::pair<NodeIndex, NodeIndex>, SimActivity> activities;
-    std::vector<std::pair<NodeIndex, Precedence>>        precedence_list;
-    double                                                max_delay;
+    std::vector<std::pair<NodeIndex, Precedence>> precedence_list;
+    double max_delay;
 
     SimContext(
-        std::vector<SimEvent>                                ev,
+        std::vector<SimEvent> ev,
         std::unordered_map<std::pair<NodeIndex, NodeIndex>, SimActivity> am,
-        std::vector<std::pair<NodeIndex, Precedence>>        pl,
-        double                                                md
+        std::vector<std::pair<NodeIndex, Precedence>> pl,
+        double md
     )
       : events(std::move(ev))
       , activities(std::move(am))
@@ -78,9 +74,7 @@ struct ConstantDist {
     double factor;
     ConstantDist(): factor(0.0) {}
     ConstantDist(double f): factor(f) {}
-    double sample(std::mt19937&, double d) const {
-        return d * factor;
-    }
+    double sample(std::mt19937&, double d) const { return d * factor; }
 };
 
 struct ExponentialDist {
@@ -92,23 +86,31 @@ struct ExponentialDist {
     {}
     double sample(std::mt19937& rng, double d) const {
         double x;
-        do {
-            x = dist(rng);
-        } while (x > max_scale);
+        do { x = dist(rng); } while (x > max_scale);
         return x * d;
     }
 };
 
-// **new**: Gamma distribution (shape?scale parametrisation)
+// **new**: Gamma distribution with optional max_scale
 struct GammaDist {
-    double shape, scale;
+    double shape, scale, max_scale;
     std::gamma_distribution<double> dist;
-    GammaDist(): shape(1.0), scale(1.0), dist(1.0, 1.0) {}
-    GammaDist(double k, double a)
-      : shape(k), scale(a), dist(k, a)
+    GammaDist()
+      : shape(1.0),
+        scale(1.0),
+        max_scale(std::numeric_limits<double>::infinity()),
+        dist(1.0,1.0)
+    {}
+    GammaDist(double k, double a, double mx = std::numeric_limits<double>::infinity())
+      : shape(k),
+        scale(a),
+        max_scale(mx),
+        dist(k, a)
     {}
     double sample(std::mt19937& rng, double d) const {
-        return dist(rng) * d;
+        double x;
+        do { x = dist(rng); } while(x > max_scale);
+        return x * d;
     }
 };
 
@@ -135,20 +137,19 @@ public:
         dist_map_.insert_or_assign(activity_type, ExponentialDist{lambda, max_scale});
     }
 
-    /// New: gamma(shape, scale)
-    void add_gamma(int activity_type, double shape, double scale) {
-        dist_map_.insert_or_assign(activity_type, GammaDist{shape, scale});
+    /// gamma(shape, scale, max_scale)
+    void add_gamma(int activity_type, double shape, double scale,
+                   double max_scale = std::numeric_limits<double>::infinity())
+    {
+        dist_map_.insert_or_assign(activity_type, GammaDist{shape, scale, max_scale});
     }
 
     double get_delay(const SimActivity& act) {
         auto it = dist_map_.find(act.activity_type);
-        if (it == dist_map_.end())
-            return 0.0;
-        // dispatch to the appropriate sample()
-        return std::visit(
-            [&](auto& d){ return d.sample(rng_, act.duration); },
-            it->second
-        );
+        if (it == dist_map_.end()) return 0.0;
+        return std::visit([&](auto& d){
+            return d.sample(rng_, act.duration);
+        }, it->second);
     }
 };
 
@@ -172,7 +173,7 @@ public:
 
         int idx = 0;
         for (auto& kv : ctx_.activities) {
-            acts_[idx]       = kv.second;
+            acts_[idx]        = kv.second;
             is_affected_[idx] = (kv.second.activity_type == 1 && kv.second.duration >= 0.001);
             base_dur_[idx]    = kv.second.duration;
             ++idx;
@@ -185,14 +186,16 @@ public:
         int na = int(acts_.size());
 
         std::vector<double> lower(ne), scheduled(ne);
-        for (auto i = 0; i < ne; ++i) {
+        for (int i = 0; i < ne; ++i) {
             lower[i]     = ctx_.events[i].timestamp.earliest;
             scheduled[i] = ctx_.events[i].timestamp.actual;
         }
 
         std::vector<double> compounded(na);
-        for (auto i = 0; i < na; ++i) {
-            compounded[i] = base_dur_[i] + (is_affected_[i] ? gen_.get_delay(acts_[i]) : 0.0);
+        for (int i = 0; i < na; ++i) {
+            compounded[i] =
+              base_dur_[i] +
+              (is_affected_[i] ? gen_.get_delay(acts_[i]) : 0.0);
         }
 
         std::vector<double> realized = lower;
@@ -210,8 +213,7 @@ public:
                     cause_event[node] = pi;
                 }
             } else if (!preds.empty()) {
-                double mx = -1e9;
-                int bi = 0;
+                double mx = -1e9; int bi = 0;
                 for (int i = 0; i < int(preds.size()); ++i) {
                     int pi = preds[i].first, ai = preds[i].second;
                     double t = realized[pi] + compounded[ai];
@@ -224,7 +226,9 @@ public:
             }
         }
 
-        return SimResult{std::move(realized), std::move(compounded), std::move(cause_event)};
+        return SimResult{std::move(realized),
+                         std::move(compounded),
+                         std::move(cause_event)};
     }
 
     std::vector<SimResult> run_many(const std::vector<int>& seeds) {
@@ -241,7 +245,7 @@ PYBIND11_MODULE(_core, m) {
 
     // EventTimestamp
     py::class_<EventTimestamp>(m, "EventTimestamp")
-        .def(py::init<double, double, double>(),
+        .def(py::init<double,double,double>(),
              py::arg("earliest"), py::arg("latest"), py::arg("actual"))
         .def_readwrite("earliest", &EventTimestamp::earliest)
         .def_readwrite("latest",   &EventTimestamp::latest)
@@ -250,16 +254,16 @@ PYBIND11_MODULE(_core, m) {
 
     // SimEvent
     py::class_<SimEvent>(m, "SimEvent")
-        .def(py::init<std::string, EventTimestamp>(),
-             py::arg("node_id"), py::arg("timestamp"))
+        .def(py::init<std::string,EventTimestamp>(),
+             py::arg("id"), py::arg("timestamp"))
         .def_readwrite("node_id",   &SimEvent::node_id)
         .def_readwrite("timestamp", &SimEvent::timestamp)
         ;
 
-    // SimActivity
+    // SimActivity (minimal_duration + activity_type)
     py::class_<SimActivity>(m, "SimActivity")
-        .def(py::init<double, int>(),
-             py::arg("duration"), py::arg("activity_type"))
+        .def(py::init<double,int>(),
+             py::arg("minimal_duration"), py::arg("activity_type"))
         .def_readwrite("duration",      &SimActivity::duration)
         .def_readwrite("activity_type", &SimActivity::activity_type)
         ;
@@ -293,15 +297,16 @@ PYBIND11_MODULE(_core, m) {
         .def(py::init<>())
         .def("set_seed",        &GenericDelayGenerator::set_seed,        py::arg("seed"))
         .def("add_constant",    &GenericDelayGenerator::add_constant,    py::arg("activity_type"), py::arg("factor"))
-        .def("add_exponential", &GenericDelayGenerator::add_exponential, py::arg("activity_type"), py::arg("lambda"), py::arg("max_scale"))
-        .def("add_gamma",       &GenericDelayGenerator::add_gamma,       py::arg("activity_type"), py::arg("shape"),  py::arg("scale"))
+        .def("add_exponential", &GenericDelayGenerator::add_exponential, py::arg("activity_type"), py::arg("lambda_"),   py::arg("max_scale"))
+        .def("add_gamma",       &GenericDelayGenerator::add_gamma,       py::arg("activity_type"), py::arg("shape"),     py::arg("scale"),
+                                                                  py::arg("max_scale") = std::numeric_limits<double>::infinity())
         ;
 
     // Simulator
     py::class_<Simulator>(m, "Simulator")
-        .def(py::init<SimContext, GenericDelayGenerator>(),
+        .def(py::init<SimContext,GenericDelayGenerator>(),
              py::arg("context"), py::arg("generator"))
-        .def("run",       &Simulator::run,      py::arg("seed"))
-        .def("run_many",  &Simulator::run_many, py::arg("seeds"))
+        .def("run",      &Simulator::run,      py::arg("seed"))
+        .def("run_many", &Simulator::run_many, py::arg("seeds"))
         ;
 }

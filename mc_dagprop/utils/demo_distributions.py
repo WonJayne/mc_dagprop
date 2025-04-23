@@ -1,68 +1,76 @@
+#!/usr/bin/env python3
+import argparse
+
 import plotly.graph_objects as go
 from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
 
 
-def make_context() -> SimContext:
-    events = [SimEvent("0", EventTimestamp(0.0, 0.0, 0.0)), SimEvent("1", EventTimestamp(0.0, 0.0, 0.0))]
-    activities = {(0, 1): SimActivity(60.0, 1)}
-    precedence_list = [(1, [(0, 0)])]
-    return SimContext(events, activities, precedence_list, max_delay=0.0)
+def simulate_and_collect(dist_name, params, seeds, base_duration=60.0):
+    """
+    Run simulations for a single distribution+parameter set and return the
+    realized timestamp of the second (delayed) node.
+    """
+    # simple 2-node DAG: A -> B
+    events = [SimEvent("A", EventTimestamp(0.0, 0.0, 0.0)), SimEvent("B", EventTimestamp(0.0, 0.0, 0.0))]
+    activities = {(0, 1): SimActivity(minimal_duration=base_duration, activity_type=1)}
+    precedence = [(1, [(0, 0)])]
+    ctx = SimContext(events, activities, precedence, max_delay=1e6)
 
+    gen = GenericDelayGenerator()
+    # configure this single activity_type=1 with the requested distribution
+    if dist_name == "constant":
+        gen.add_constant(1, factor=params["factor"])
+    elif dist_name == "exponential":
+        gen.add_exponential(1, lambda_=params["lambda"], max_scale=params["max_scale"])
+    elif dist_name == "gamma":
+        gen.add_gamma(1, shape=params["shape"], scale=params["scale"], max_scale=params.get("max_scale", 1e6))
+    else:
+        raise ValueError(dist_name)
 
-def sample_realized(generator: GenericDelayGenerator, n_samples: int = 10_000) -> list[float]:
-    ctx = make_context()
-    sim = Simulator(ctx, generator)
-    seeds = list(range(n_samples))
+    sim = Simulator(ctx, gen)
     results = sim.run_many(seeds)
-    # extract realized timestamp of event "1"
+    # extract the realized time of event B (index 1)
     return [res.realized[1] for res in results]
 
 
-def visualize_constant(factor: float, n_samples: int = 10_000) -> go.Figure:
-    gen = GenericDelayGenerator()
-    gen.add_constant(activity_type=1, factor=factor)
-    data = sample_realized(gen, n_samples)
+def main():
+    parser = argparse.ArgumentParser(description="Demo: compare Constant, Exponential & Gamma delay distributions")
+    parser.add_argument("--trials", type=int, default=10_000, help="number of Monte-Carlo runs per parameter set")
+    args = parser.parse_args()
+    seeds = tuple(range(args.trials))
 
-    fig = go.Figure(go.Histogram(x=data, nbinsx=50, name=f"constant * {factor}"))
+    # define multiple parameter sets per distribution
+    configs = {
+        "constant": [{"factor": 1.0}, {"factor": 2.0}],
+        "exponential": [
+            {"lambda": 0.1, "max_scale": 5.0},
+            {"lambda": 0.5, "max_scale": 5.0},
+            {"lambda": 1.0, "max_scale": 5.0},
+        ],
+        "gamma": [
+            {"shape": 0.1, "scale": 2.5, "max_scale": 3.0},
+            {"shape": 0.5, "scale": 2.0},
+            {"shape": 1.0, "scale": 1.0},
+            {"shape": 2.0, "scale": 0.5},
+            {"shape": 5.0, "scale": 0.2},
+        ],
+    }
+
+    fig = go.Figure()
+    for dist_name, param_list in configs.items():
+        for params in param_list:
+            label = f"{dist_name} " + ", ".join(f"{k}={v}" for k, v in params.items())
+            data = simulate_and_collect(dist_name, params, seeds)
+            fig.add_trace(go.Histogram(x=data, name=label, opacity=0.7, histnorm="probability density"))
+
     fig.update_layout(
-        title=f"Constant Delay (factor={factor})", xaxis_title="Realized time of node 1", yaxis_title="Count"
-    )
-    return fig
-
-
-def visualize_exponential(lambd: float, max_scale: float, n_samples: int = 10_000) -> go.Figure:
-    gen = GenericDelayGenerator()
-    gen.add_exponential(1, lambd, max_scale)
-    data = sample_realized(gen, n_samples)
-
-    fig = go.Figure(go.Histogram(x=data, nbinsx=50, name=f"exp(lambda={lambd}), max={max_scale}"))
-    fig.update_layout(
-        title=f"Exponential Delay (labda={lambd}, max_scale={max_scale})",
-        xaxis_title="Realized time of node 1",
+        title="Distribution of Arrival Times at B (after base 60s)",
+        xaxis_title="Realized time of B (s)",
         yaxis_title="Count",
+        barmode="overlay",
     )
-    return fig
-
-
-def visualize_gamma(shape: float, scale: float, n_samples: int = 10_000) -> go.Figure:
-    gen = GenericDelayGenerator()
-    gen.add_gamma(1, shape, scale)
-    data = sample_realized(gen, n_samples)
-
-    fig = go.Figure(go.Histogram(x=data, nbinsx=50, name=f"gamma(k={shape}, m={scale})"))
-    fig.update_layout(
-        title=f"Gamma Delay (shape={shape}, scale={scale})", xaxis_title="Realized time of node 1", yaxis_title="Count"
-    )
-    return fig
+    fig.show()
 
 
 if __name__ == "__main__":
-    # Render each in sequence (in Jupyter they'd display inline;when run as script they'll open your browser):
-    fig1 = visualize_constant(factor=0.5)
-    fig1.show()
-
-    fig2 = visualize_exponential(lambd=0.1, max_scale=0.3)
-    fig2.show()
-
-    fig3 = visualize_gamma(shape=2.0, scale=0.5)
-    fig3.show()
+    main()
