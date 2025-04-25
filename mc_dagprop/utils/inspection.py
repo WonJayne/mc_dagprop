@@ -3,13 +3,12 @@ from collections import defaultdict
 from collections.abc import Collection
 
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
 from mc_dagprop import SimContext, SimResult
+from plotly.subplots import make_subplots
 
 
 def retrieve_absolute_and_relative_delays(
-        context: SimContext, result: SimResult
+    context: SimContext, result: SimResult
 ) -> tuple[dict[int, list[float]], dict[int, list[float]]]:
     """
     Bucket absolute and relative delays by activity_type.
@@ -17,10 +16,10 @@ def retrieve_absolute_and_relative_delays(
     absolute_delays_by_type = defaultdict(list)
     relative_delays_by_type = defaultdict(list)
 
-    for i, activity in enumerate(context.activities.values()):
+    for link_index, activity in context.activities.values():
         a_type = activity.activity_type
         base = activity.minimal_duration
-        delta = result.delays[i] - base
+        delta = result.delays[link_index] - base
         absolute_delays_by_type[a_type].append(delta)
         if base != 0.0:
             relative_delays_by_type[a_type].append(delta / base)
@@ -56,7 +55,7 @@ def plot_activity_delays(context: SimContext, results: Collection[SimResult]) ->
         cols=n_types,
         shared_yaxes=False,
         subplot_titles=[f"Abs delay (type {t})" for t in activity_types]
-                       + [f"Rel delay (type {t})" for t in activity_types],
+        + [f"Rel delay (type {t})" for t in activity_types],
         vertical_spacing=0.1,
     )
 

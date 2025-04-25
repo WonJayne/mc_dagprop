@@ -12,7 +12,7 @@ def simulate_and_collect(dist_name, params, seeds, base_duration=60.0):
     """
     # simple 2-node DAG: A -> B
     events = [SimEvent("A", EventTimestamp(0.0, 0.0, 0.0)), SimEvent("B", EventTimestamp(0.0, 0.0, 0.0))]
-    activities = {(0, 1): SimActivity(minimal_duration=base_duration, activity_type=1)}
+    activities = {(0, 1): (0, SimActivity(minimal_duration=base_duration, activity_type=1))}
     precedence = [(1, [(0, 0)])]
     ctx = SimContext(events, activities, precedence, max_delay=1e6)
 
