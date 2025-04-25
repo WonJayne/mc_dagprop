@@ -42,7 +42,7 @@ class TestSimulator(unittest.TestCase):
         # delays array length == #links
         self.assertEqual(len(d), 2)
 
-        self.assertEqual(res.cause_event[0], 0)
+        self.assertEqual(res.cause_event[0], -1) # None
         self.assertEqual(res.cause_event[1], 0)
         self.assertEqual(res.cause_event[2], 1)
 
@@ -72,6 +72,24 @@ class TestSimulator(unittest.TestCase):
 
             # delays vector has two entries
             self.assertEqual(len(deltas), 2)
+
+    def test_run_many_array(self) -> None:
+        # Test the run_many method with an array of seeds
+        gen = GenericDelayGenerator()
+        gen.add_constant(activity_type=1, factor=1.0)
+        sim = Simulator(self.context, gen)
+
+        seeds = tuple(range(100_000))
+        results = sim.run_many_arrays(seeds)
+
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[0].shape[1], len(seeds))
+        self.assertEqual(results[1].shape[1], len(seeds))
+        self.assertEqual(results[2].shape[1], len(seeds))
+
+        self.assertEqual(results[0].shape[0], 3)
+        self.assertEqual(results[1].shape[0], 2)
+        self.assertEqual(results[2].shape[0], 3)
 
 
 if __name__ == "__main__":

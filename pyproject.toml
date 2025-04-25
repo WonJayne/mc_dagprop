@@ -1,16 +1,17 @@
 [project]
 name = "mc-dagprop"
-version = "0.1.12"
+version = "0.1.17"
 description = "Fast, Monte Carlo DAG propagation simulator with user‑defined delay distributions"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" }
 ]
 requires-python = ">=3.12"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
 
 [tool.poetry.dependencies]
 numpy = "^2.0.0"
+plotly = "^6.0.0"
 
 
 [build-system]

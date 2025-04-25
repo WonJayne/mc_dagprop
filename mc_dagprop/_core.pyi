@@ -1,9 +1,7 @@
 # mc_dagprop/_core.pyi
 from collections.abc import Iterable, Mapping, Sequence
 
-import numpy as np
 from numpy._typing import NDArray
-
 
 class SimEvent:
     """
@@ -42,7 +40,7 @@ class SimContext:
     """
 
     events: Sequence[SimEvent]
-    activities: Mapping[tuple[int, int], tuple[int, SimActivity]]
+    activities: Mapping[tuple[int, int], SimActivity]
     precedence_list: Sequence[tuple[int, list[tuple[int, int]]]]
     max_delay: float
 
@@ -82,3 +80,4 @@ class Simulator:
     def __init__(self, context: SimContext, generator: GenericDelayGenerator) -> None: ...
     def run(self, seed: int) -> SimResult: ...
     def run_many(self, seeds: Iterable[int]) -> list[SimResult]: ...
+    def run_many_arrays(self, seeds: Iterable[int]) -> tuple[NDArray[float], NDArray[float], NDArray[int]]: ...
