@@ -83,11 +83,6 @@ result = sim.run(seed=42)
 print("Realized times:", result.realized)
 print("Edge durations:", result.durations)
 print("Causal predecessors:", result.cause_event)
-
-# 4) Batch-run with fast array output
-R = [1, 2, 3, 4, 5]
-realized_arr, durations_arr, cause_arr = sim.run_many_arrays(R)
-# shapes: realized_arr.shape == (N_nodes, len(R)), durations_arr.shape == (N_links, len(R))
 ```
 
 ---
@@ -138,11 +133,6 @@ Configurable delay factory (one distribution per `activity_type`):
 
 - `.run(seed: int) → SimResult`  
 - `.run_many(seeds: Sequence[int]) → List[SimResult]`  
-- `.run_many_arrays(seeds: Sequence[int]) → tuple[
-    realized: NDArray[float] (n_nodes × n_runs),
-    durations: NDArray[float] (n_links × n_runs),
-    cause_event: NDArray[int] (n_nodes × n_runs)
- ]`
 
 ### `SimResult`
 
