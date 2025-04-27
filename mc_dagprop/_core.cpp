@@ -239,9 +239,9 @@ public:
           changed = true;
         }
       }
-      if(changed) {
+      if(changed){
         realized_ts_[n_index] = latest;
-        cause_[n_index]       = cause;
+        cause_[n_index] = cause;
       }
     }
 

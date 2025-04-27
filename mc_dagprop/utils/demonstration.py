@@ -49,6 +49,7 @@ def main():
         ],
         "gamma": [
             {"shape": 0.1, "scale": 2.5, "max_scale": 3.0},
+            {"shape": 2, "scale": 0.05, "max_scale": 5},
             {"shape": 0.5, "scale": 2.0},
             {"shape": 1.0, "scale": 1.0},
             {"shape": 2.0, "scale": 0.5},

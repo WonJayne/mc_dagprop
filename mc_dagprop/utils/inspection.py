@@ -19,7 +19,7 @@ def retrieve_absolute_and_relative_delays(
     for link_index, activity in context.activities.values():
         a_type = activity.activity_type
         base = activity.minimal_duration
-        delta = result.delays[link_index] - base
+        delta = result.durations[link_index] - base
         absolute_delays_by_type[a_type].append(delta)
         if base != 0.0:
             relative_delays_by_type[a_type].append(delta / base)
