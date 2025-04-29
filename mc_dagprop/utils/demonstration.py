@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
 
 
-def simulate_and_collect(dist_name, params, seeds, base_duration=60.0):
+def simulate_and_collect(dist_name, params, seeds, base_duration=60.0) -> list[float]:
     """
     Run simulations for a single distribution+parameter set and return the
     realized timestamp of the second (delayed) node.
@@ -33,7 +33,7 @@ def simulate_and_collect(dist_name, params, seeds, base_duration=60.0):
     return [res.realized[1] for res in results]
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Demo: compare Constant, Exponential & Gamma delay distributions")
     parser.add_argument("--trials", type=int, default=10_000, help="number of Monte-Carlo runs per parameter set")
     args = parser.parse_args()
