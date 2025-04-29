@@ -14,17 +14,17 @@ class GetPybindInclude:
 
 
 if sys.platform == "win32":
-    platform_compile_args = ["/O2", "/std:c++17", "/GL"]
+    platform_compile_args = ["/O2", "/std:c++20", "/GL"]
     platform_linker_args = ["/LTCG"]
 else:
-    platform_compile_args = ["-O3", "-std=c++17", "-flto"]
+    platform_compile_args = ["-O3", "-std=c++20", "-flto"]
     platform_linker_args = ["-flto"]
 
 ext_modules = [
     Extension(
         "mc_dagprop._core",
         sources=["mc_dagprop/_core.cpp"],
-        include_dirs=[GetPybindInclude()],
+        include_dirs=[GetPybindInclude(), "mc_dagprop"],
         language="c++",
         extra_compile_args=platform_compile_args,
         extra_link_args=platform_linker_args,

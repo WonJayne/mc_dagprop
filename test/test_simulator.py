@@ -1,6 +1,8 @@
 import unittest
 
+import numpy as np
 from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
+from plotly import graph_objects
 
 
 class TestSimulator(unittest.TestCase):
@@ -117,7 +119,7 @@ class TestSimulator(unittest.TestCase):
         sim = Simulator(self.context, gen)
         res = sim.run(seed=7)
 
-        self.assertEqual(res.realized[3], 78.0)
+        self.assertEqual(res.realized[3], 68.0)
         self.assertEqual(res.realized[5], 100.0)
 
     def test_empirical_relative(self) -> None:
@@ -126,8 +128,25 @@ class TestSimulator(unittest.TestCase):
         sim = Simulator(self.context, gen)
         res = sim.run(seed=7)
 
-        self.assertAlmostEqual(res.realized[3], 34.40, places=4)
+        self.assertAlmostEqual(res.realized[3], 34.10, places=4)
         self.assertEqual(res.realized[5], 100.0)
+
+    def test_empirical_relative_with_exponential(self) -> None:
+        values = []
+        np.random.seed(7)
+        while len(values) < 1000000:
+            value = 10
+            while value > 5.0:
+                value = np.random.exponential(3.0)
+            values.append(value)
+        generator = GenericDelayGenerator()
+        hist, bin_edges = np.histogram(values, bins=1000, density=True)
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        generator.add_empirical_relative(activity_type=1, factors=bin_centers, weights=hist)
+        simulator = Simulator(self.context, generator)
+        result = simulator.run(seed=7)
+        self.assertAlmostEqual(result.realized[3], 23.062461393412335, places=3)
+        self.assertEqual(result.realized[5], 100.0)
 
 
 if __name__ == "__main__":

@@ -7,11 +7,11 @@
 #include <algorithm>
 #include <limits>
 #include <numeric>
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include <_custom_rng.hpp>
 
 namespace py = pybind11;
 using namespace std;
@@ -20,6 +20,7 @@ using namespace std;
 using NodeIndex = int;
 using EdgeIndex = int;
 using Preds = vector<pair<NodeIndex, EdgeIndex>>;
+using RNG = utl::random::generators::Xoshiro256PP;
 
 // ── Hash for pair<int,int> ────────────────────────────────────────────────
 namespace std {
@@ -68,14 +69,14 @@ struct SimResult {
 struct ConstantDist {
     double factor;
     ConstantDist(const double f = 0.0) : factor(f) {}
-    double sample(mt19937 &, const double d) const { return d * factor; }
+    double sample(RNG &, const double d) const { return d * factor; }
 };
 
 struct ExponentialDist {
     double lambda, max_scale;
     exponential_distribution<double> dist;
     ExponentialDist(const double lam = 1.0, const double mx = 1.0) : lambda(lam), max_scale(mx), dist(1.0 / lam) {}
-    double sample(mt19937 &rng, const double d) const {
+    double sample(RNG &rng, const double d) const {
         double x;
         do {
             x = dist(rng);
@@ -89,7 +90,7 @@ struct GammaDist {
     gamma_distribution<double> dist;
     GammaDist(const double k = 1.0, const double s = 1.0, const double m = numeric_limits<double>::infinity())
         : shape(k), scale(s), max_scale(m), dist(k, s) {}
-    double sample(mt19937 &rng, const double d) const {
+    double sample(RNG &rng, const double d) const {
         double x;
         do {
             x = dist(rng);
@@ -118,7 +119,7 @@ struct EmpiricalAbsoluteDist {
         dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
     }
 
-    double sample(std::mt19937 &rng, double /*duration*/) const {
+    double sample(RNG &rng, double /*duration*/) const {
         return values[ dist(rng) ];
     }
 };
@@ -135,7 +136,7 @@ struct EmpiricalRelativeDist {
         dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
     }
 
-    double sample(std::mt19937 &rng, double duration) const {
+    double sample(RNG &rng, double duration) const {
         return factors[ dist(rng) ] * duration;
     }
 };
@@ -151,7 +152,7 @@ using DistVar = std::variant<
 // ── Delay Generator ──────────────────────────────────────────────────────
 class GenericDelayGenerator {
    public:
-    mt19937 rng_;
+    RNG rng_;
     unordered_map<int, DistVar> dist_map_;
 
     GenericDelayGenerator() : rng_(random_device{}()) {}
@@ -170,7 +171,7 @@ class Simulator {
     vector<DistVar> dists_;           // flattened distributions
     vector<SimActivity> activities_;  // length = max_link_index+1
     vector<int> act2dist_;            // same length, -1=no-dist
-    mt19937 rng_;
+    RNG rng_;
     vector<Preds> preds_by_node_;
     vector<NodeIndex> node_indices_;  // for each event, its index
 

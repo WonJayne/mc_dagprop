@@ -8,6 +8,9 @@
 written in C++ with Python bindings via **pybind11**. It allows you to model timing networks  
 (timetables, precedence graphs, etc.) and inject user-defined delay distributions on edges.
 
+Under the hood, we leverage the high-performance [utl::random module](https://github.com/DmitriBogdanov/UTL/blob/master/docs/module_random.md)  
+for all pseudo-random number generation—offering better speed and quality than the standard library.
+
 ---
 
 ## Features
