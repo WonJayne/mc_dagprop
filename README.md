@@ -26,7 +26,6 @@ for all pseudo-random number generation—offering better speed and quality than
     - **Relative**: scaling factors with weights
   - Easily extendable (Weibull, etc.)  
 - Single-run (`run(seed)`) and batch-run (`run_many([seeds])`)  
-- Fast array-based batch mode (`run_many_arrays`)  
 - Returns a **SimResult**: realized times, per-edge durations, and causal predecessors  
 
 > **Note:** Defining multiple distributions for the *same* `activity_type` will override previous settings.  
@@ -167,7 +166,6 @@ Displays histograms of realized times and delays.
 git clone https://github.com/WonJayne/mc_dagprop.git
 cd mc_dagprop
 poetry install
-poetry run pytest
 ```
 
 ---
