@@ -98,7 +98,55 @@ struct GammaDist {
     }
 };
 
-using DistVar = variant<ConstantDist, ExponentialDist, GammaDist>;
+// ── Empirical “table” distributions ─────────────────────────────────────
+
+// 1) Absolute: user‐supplied values are taken literally
+struct EmpiricalAbsoluteDist {
+    std::vector<double> values;
+    std::discrete_distribution<size_t> dist;
+
+    EmpiricalAbsoluteDist(
+      std::vector<double> vals,
+      std::vector<double> weights
+    )
+      : values(std::move(vals))
+      // build the distribution *after* we’ve checked sizes
+      , dist()
+    {
+        if (values.size() != weights.size())
+            throw std::runtime_error("EmpiricalAbsoluteDist: values and weights must have same length");
+        dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
+    }
+
+    double sample(std::mt19937 &rng, double /*duration*/) const {
+        return values[ dist(rng) ];
+    }
+};
+
+// 2) Relative: user‐supplied factors in [0..∞), multiplied by the base duration
+struct EmpiricalRelativeDist {
+    std::vector<double> factors;
+    std::discrete_distribution<size_t> dist;
+
+    EmpiricalRelativeDist(std::vector<double> facs, std::vector<double> weights): factors(std::move(facs)), dist()
+    {
+        if (factors.size() != weights.size())
+            throw std::runtime_error("EmpiricalRelativeDist: factors and weights must have same length");
+        dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
+    }
+
+    double sample(std::mt19937 &rng, double duration) const {
+        return factors[ dist(rng) ] * duration;
+    }
+};
+
+using DistVar = std::variant<
+    ConstantDist,
+    ExponentialDist,
+    GammaDist,
+    EmpiricalAbsoluteDist,
+    EmpiricalRelativeDist
+>;
 
 // ── Delay Generator ──────────────────────────────────────────────────────
 class GenericDelayGenerator {
@@ -328,7 +376,26 @@ PYBIND11_MODULE(_core, m) {
              py::arg("max_scale"), "Exponential(λ) truncated at max_scale")
         .def("add_gamma", &GenericDelayGenerator::add_gamma, py::arg("activity_type"), py::arg("shape"),
              py::arg("scale"), py::arg("max_scale") = numeric_limits<double>::infinity(),
-             "Gamma(shape,scale) truncated at max_scale");
+             "Gamma(shape,scale) truncated at max_scale")
+        .def("add_empirical_absolute", [](GenericDelayGenerator &g,
+            int activity_type,
+            std::vector<double> values,
+            std::vector<double> weights)
+         { g.dist_map_[activity_type] = EmpiricalAbsoluteDist{std::move(values), std::move(weights)}; },
+         py::arg("activity_type"),
+         py::arg("values"),
+         py::arg("weights"),
+         "Empirical absolute: draw one of your provided values, weighted by weights.")
+        .def("add_empirical_relative",
+         [](GenericDelayGenerator &g,
+            int activity_type,
+            std::vector<double> factors,
+            std::vector<double> weights)
+         { g.dist_map_[activity_type] = EmpiricalRelativeDist{std::move(factors), std::move(weights)}; },
+         py::arg("activity_type"),
+         py::arg("factors"),
+         py::arg("weights"),
+         "Empirical relative: draw a factor in [0,∞), then multiply by the activity duration.");
 
     // Simulator
     py::class_<Simulator>(m, "Simulator")

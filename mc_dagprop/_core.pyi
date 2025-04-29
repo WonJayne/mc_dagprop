@@ -1,6 +1,6 @@
 # mc_dagprop/_core.pyi
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TypeAlias
+from typing import Collection, TypeAlias
 
 from numpy._typing import NDArray
 
@@ -79,6 +79,12 @@ class GenericDelayGenerator:
     def add_exponential(self, activity_type: ActivityType, lambda_: float, max_scale: float) -> None: ...
     def add_gamma(
         self, activity_type: ActivityType, shape: float, scale: float, max_scale: float = float("inf")
+    ) -> None: ...
+    def add_empirical_absolute(
+        self, activity_type: ActivityType, values: Collection[Second], weights: Collection[float]
+    ) -> None: ...
+    def add_empirical_relative(
+        self, activity_type: ActivityType, factors: Collection[Second], weights: Collection[float]
     ) -> None: ...
 
 class Simulator:

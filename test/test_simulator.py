@@ -111,6 +111,24 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(res.cause_event[4], 3)
         self.assertEqual(res.cause_event[5], -1)
 
+    def test_empirical_absolute(self) -> None:
+        gen = GenericDelayGenerator()
+        gen.add_empirical_absolute(activity_type=1, values=[10, 20, 40, 50], weights=[0.1, 0.2, 0.3, 0.4])
+        sim = Simulator(self.context, gen)
+        res = sim.run(seed=7)
+
+        self.assertEqual(res.realized[3], 78.0)
+        self.assertEqual(res.realized[5], 100.0)
+
+    def test_empirical_relative(self) -> None:
+        gen = GenericDelayGenerator()
+        gen.add_empirical_relative(activity_type=1, factors=[1.2, 1.3, 1.35, 4.5], weights=[0.1, 0.2, 0.3, 0.4])
+        sim = Simulator(self.context, gen)
+        res = sim.run(seed=7)
+
+        self.assertAlmostEqual(res.realized[3], 34.40, places=4)
+        self.assertEqual(res.realized[5], 100.0)
+
 
 if __name__ == "__main__":
     unittest.main()

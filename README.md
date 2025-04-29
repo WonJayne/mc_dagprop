@@ -16,8 +16,11 @@ written in C++ with Python bindings via **pybind11**. It allows you to model tim
 - Simple Python API via **poetry** or **pip**  
 - Custom per-activity-type delay distributions:
   - **Constant** (linear scaling)
-  - **Exponential** (with cutoff)
-  - **Gamma** (shape & scale)
+  - **Exponential** (scales base duration with cutoff)
+  - **Gamma** (shape & scale, to scale base duration)
+  - **Empirical** (absolute or relative)
+    - **Absolute**: fixed values with weights
+    - **Relative**: scaling factors with weights
   - Easily extendable (Weibull, etc.)  
 - Single-run (`run(seed)`) and batch-run (`run_many([seeds])`)  
 - Fast array-based batch mode (`run_many_arrays`)  
@@ -59,7 +62,7 @@ events = [
 ]
 
 activities = {
-    (0, 1): SimActivity(minimal_duration=60.0, activity_type=1),
+    (0, 1): (0,SimActivity(minimal_duration=60.0, activity_type=1)),
 }
 
 precedence = [
@@ -127,6 +130,8 @@ Configurable delay factory (one distribution per `activity_type`):
 - `.add_constant(activity_type, factor)`  
 - `.add_exponential(activity_type, lambda_, max_scale)`  
 - `.add_gamma(activity_type, shape, scale, max_scale=∞)`  
+- `.add_empirical_absolute(activity_type, values, weights)`
+- `.add_empirical_relative(activity_type, factors, weights)`
 - `.set_seed(seed)`  
 
 ### `Simulator(context: SimContext, generator: GenericDelayGenerator)`
