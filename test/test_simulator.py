@@ -2,7 +2,6 @@ import unittest
 
 import numpy as np
 from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
-from plotly import graph_objects
 
 
 class TestSimulator(unittest.TestCase):
@@ -153,7 +152,7 @@ class LargeScaleTest(unittest.TestCase):
     def setUp(self):
         self.events = [SimEvent(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(10_000)]
         self.link_map = {(i, i + 1): (i, SimActivity(3.0, 1)) for i in range(9999)}
-        self.precedence_list = [(i, [(i - 1, i)]) for i in range(1, 10000)]
+        self.precedence_list = [(i, [(i - 1, i)]) for i in range(1, 10_000)]
         self.context = SimContext(
             events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0
         )
