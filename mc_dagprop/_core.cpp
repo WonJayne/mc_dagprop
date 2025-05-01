@@ -247,43 +247,31 @@ class Simulator {
         for (auto i = 0; i < N; ++i) {
             realized_ts_[i] = ctx_.events[i].ts.earliest;
         }
-        // base durations
-        for (auto i = 0; i < activity_count_; ++i) {
-            extended_durations_[i] = activities_[i].duration;
-        }
-        // sample + compound
+
+        // draw random delays
         for (auto i = 0; i < activity_count_; ++i) {
             auto di = act2dist_[i];
-            if (di >= 0) {
-                auto delta = extended_durations_[i];
-                // sample from distribution
-                auto extra = visit([&](auto &d) { return d.sample(rng_, delta); }, dists_[di]);
-                if (extra > 0.0) {
-                    extended_durations_[i] = delta + extra;
-                }
-            }
+            auto duration = activities_[i].duration;
+            auto extra = visit([&](auto &d) { return d.sample(rng_, duration); }, dists_[di]);
+            extended_durations_[i] = duration + extra;
         }
-        // init propagate
-        std::fill(cause_.begin(), cause_.end(), -1);
+        // init propagate (removed cause initialization for speed-up)
+        // std::fill(cause_.begin(), cause_.end(), -1);
 
         // actual propagation
         for (auto i = 0; i < N; ++i) {
             auto n_index = node_indices_[i];
             auto latest = realized_ts_[n_index];
-            NodeIndex cause = n_index;
-            auto changed = false;
+            NodeIndex cause = -1;
             for (auto &pr : preds_by_node_[n_index]) {
                 auto t = realized_ts_[pr.first] + extended_durations_[pr.second];
                 if (t >= latest) {
                     latest = t;
                     cause = pr.first;
-                    changed = true;
                 }
             }
-            if (changed) {
-                realized_ts_[n_index] = latest;
-                cause_[n_index] = cause;
-            }
+            realized_ts_[n_index] = latest;
+            cause_[n_index] = cause;
         }
 
         return SimResult{realized_ts_, extended_durations_, cause_};
