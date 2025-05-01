@@ -149,5 +149,32 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(result.realized[5], 100.0)
 
 
+class LargeScaleTest(unittest.TestCase):
+    def setUp(self):
+        self.events = [SimEvent(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(10_000)]
+        self.link_map = {(i, i + 1): (i, SimActivity(3.0, 1)) for i in range(9999)}
+        self.precedence_list = [(i, [(i - 1, i)]) for i in range(1, 10000)]
+        self.context = SimContext(
+            events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0
+        )
+
+    def test_large_scale_simulation(self):
+        gen = GenericDelayGenerator()
+        gen.add_constant(activity_type=1, factor=1.0)
+        sim = Simulator(self.context, gen)
+
+        # Run the simulation
+        res = sim.run(seed=7)
+
+        # Check the length of the results
+        self.assertEqual(len(res.realized), 10000)
+        self.assertEqual(len(res.durations), 9999)
+        self.assertEqual(len(res.cause_event), 10000)
+
+        # Check some specific values
+        self.assertAlmostEqual(res.realized[0], 0.0, places=6)
+        self.assertAlmostEqual(res.realized[9999], 59988.0, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()

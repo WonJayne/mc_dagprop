@@ -6,6 +6,8 @@ REM Delete old build artifacts
 del /q dist\*.*
 del /q build\*.*
 
+call devtools.cmd -r || exit /b
+
 call poetry build || exit /b
 
 for %%f in (dist\mc_dagprop*.whl) do (

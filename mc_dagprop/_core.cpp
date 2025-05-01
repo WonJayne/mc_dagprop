@@ -233,7 +233,17 @@ class Simulator {
         earliest_allowed_.resize(N);
         realized_ts_.resize(N);
         cause_.resize(N);
+        std::fill(cause_.begin(), cause_.end(), -1);
         extended_durations_.resize(L);
+
+        // fill all durations that are never delayed with standard duration
+        for (auto i = 0; i < L; ++i) {
+            auto di = act2dist_[i];
+            if (di == -1) {
+                extended_durations_[i] = activities_[i].duration;
+                continue;
+            }
+        }
     }
 
     inline const int node_count() const noexcept { return int(earliest_allowed_.size()); }
@@ -251,6 +261,7 @@ class Simulator {
         // draw random delays
         for (auto i = 0; i < activity_count_; ++i) {
             auto di = act2dist_[i];
+            if (di == -1) { continue; }
             auto duration = activities_[i].duration;
             auto extra = visit([&](auto &d) { return d.sample(rng_, duration); }, dists_[di]);
             extended_durations_[i] = duration + extra;
@@ -258,9 +269,7 @@ class Simulator {
         // init propagate (removed cause initialization for speed-up)
         // std::fill(cause_.begin(), cause_.end(), -1);
 
-        // actual propagation
-        for (auto i = 0; i < N; ++i) {
-            auto n_index = node_indices_[i];
+        for (auto& n_index: node_indices_) {
             auto latest = realized_ts_[n_index];
             NodeIndex cause = -1;
             for (auto &pr : preds_by_node_[n_index]) {
