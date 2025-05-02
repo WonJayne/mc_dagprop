@@ -1,14 +1,12 @@
 [project]
 name = "mc-dagprop"
-version = "0.3.2"
+version = "0.3.3"
 description = "Fast, Monte Carlo DAG propagation simulator with user‑defined delay distributions"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    # Windows only
-    "Operating System :: Windows",
 ]
 requires-python = ">=3.12"
 readme = "README.md"

@@ -4,6 +4,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <_custom_rng.hpp>
 #include <algorithm>
 #include <limits>
 #include <numeric>
@@ -11,7 +12,6 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
-#include <_custom_rng.hpp>
 
 namespace py = pybind11;
 using namespace std;
@@ -106,22 +106,17 @@ struct EmpiricalAbsoluteDist {
     std::vector<double> values;
     std::discrete_distribution<size_t> dist;
 
-    EmpiricalAbsoluteDist(
-      std::vector<double> vals,
-      std::vector<double> weights
-    )
-      : values(std::move(vals))
-      // build the distribution *after* we’ve checked sizes
-      , dist()
-    {
+    EmpiricalAbsoluteDist(std::vector<double> vals, std::vector<double> weights)
+        : values(std::move(vals))
+          // build the distribution *after* we’ve checked sizes
+          ,
+          dist() {
         if (values.size() != weights.size())
             throw std::runtime_error("EmpiricalAbsoluteDist: values and weights must have same length");
         dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
     }
 
-    double sample(RNG &rng, double /*duration*/) const {
-        return values[ dist(rng) ];
-    }
+    double sample(RNG &rng, double /*duration*/) const { return values[dist(rng)]; }
 };
 
 // 2) Relative: user‐supplied factors in [0..∞), multiplied by the base duration
@@ -129,25 +124,16 @@ struct EmpiricalRelativeDist {
     std::vector<double> factors;
     std::discrete_distribution<size_t> dist;
 
-    EmpiricalRelativeDist(std::vector<double> facs, std::vector<double> weights): factors(std::move(facs)), dist()
-    {
+    EmpiricalRelativeDist(std::vector<double> facs, std::vector<double> weights) : factors(std::move(facs)), dist() {
         if (factors.size() != weights.size())
             throw std::runtime_error("EmpiricalRelativeDist: factors and weights must have same length");
         dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
     }
 
-    double sample(RNG &rng, double duration) const {
-        return factors[ dist(rng) ] * duration;
-    }
+    double sample(RNG &rng, double duration) const { return factors[dist(rng)] * duration; }
 };
 
-using DistVar = std::variant<
-    ConstantDist,
-    ExponentialDist,
-    GammaDist,
-    EmpiricalAbsoluteDist,
-    EmpiricalRelativeDist
->;
+using DistVar = std::variant<ConstantDist, ExponentialDist, GammaDist, EmpiricalAbsoluteDist, EmpiricalRelativeDist>;
 
 // ── Delay Generator ──────────────────────────────────────────────────────
 class GenericDelayGenerator {
@@ -261,7 +247,9 @@ class Simulator {
         // draw random delays
         for (auto i = 0; i < activity_count_; ++i) {
             auto di = act2dist_[i];
-            if (di == -1) { continue; }
+            if (di == -1) {
+                continue;
+            }
             auto duration = activities_[i].duration;
             auto extra = visit([&](auto &d) { return d.sample(rng_, duration); }, dists_[di]);
             extended_durations_[i] = duration + extra;
@@ -269,7 +257,7 @@ class Simulator {
         // init propagate (removed cause initialization for speed-up)
         // std::fill(cause_.begin(), cause_.end(), -1);
 
-        for (auto& n_index: node_indices_) {
+        for (auto &n_index : node_indices_) {
             auto latest = realized_ts_[n_index];
             NodeIndex cause = -1;
             for (auto &pr : preds_by_node_[n_index]) {
@@ -334,34 +322,31 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("max_delay", &SimContext::max_delay);
 
     // SimResult // SimResult → return NumPy arrays instead of lists
-    py::class_<SimResult>(m, "SimResult")
+    py::class_<SimResult>(m, "SimResult", py::buffer_protocol())
+        .def_buffer([](SimResult &r) -> py::buffer_info {
+            return py::buffer_info(r.realized.data(),                        // Pointer to buffer
+                                   sizeof(double),                           // Size of one scalar
+                                   py::format_descriptor<double>::format(),  // Python struct-style format descriptor
+                                   1,                                        // Number of dimensions
+                                   {r.realized.size()},                      // Buffer dimensions
+                                   {sizeof(double)}                          // Strides (in bytes) for each index
+            );
+        })
         .def_property_readonly(
             "realized",
             [](const SimResult &r) {
-                // make a new 1-D array and copy C++ vector → NumPy
-                py::array_t<double> arr(r.realized.size());
-                double *ptr = arr.mutable_data();
-                for (size_t i = 0; i < r.realized.size(); ++i) ptr[i] = r.realized[i];
-                return arr;
+                return py::array(r.realized.size(),  // shape
+                                 r.realized.data(),  // pointer to data
+                                 py::cast(r)         // capsule to ensure SimResult stays alive
+                );
             },
             "Final event times as a NumPy array")
         .def_property_readonly(
-            "durations",
-            [](const SimResult &r) {
-                py::array_t<double> arr(r.durations.size());
-                double *ptr = arr.mutable_data();
-                for (size_t i = 0; i < r.durations.size(); ++i) ptr[i] = r.durations[i];
-                return arr;
-            },
+            "durations", [](SimResult &r) { return py::array(r.durations.size(), r.durations.data(), py::cast(r)); },
             "Per-link durations (incl. extra) as a NumPy array")
         .def_property_readonly(
             "cause_event",
-            [](const SimResult &r) {
-                py::array_t<int> arr(r.cause_event.size());
-                int *ptr = arr.mutable_data();
-                for (size_t i = 0; i < r.cause_event.size(); ++i) ptr[i] = r.cause_event[i];
-                return arr;
-            },
+            [](SimResult &r) { return py::array(r.cause_event.size(), r.cause_event.data(), py::cast(r)); },
             "Index of predecessor causing each event as a NumPy array");
 
     // GenericDelayGenerator
@@ -375,25 +360,20 @@ PYBIND11_MODULE(_core, m) {
         .def("add_gamma", &GenericDelayGenerator::add_gamma, py::arg("activity_type"), py::arg("shape"),
              py::arg("scale"), py::arg("max_scale") = numeric_limits<double>::infinity(),
              "Gamma(shape,scale) truncated at max_scale")
-        .def("add_empirical_absolute", [](GenericDelayGenerator &g,
-            int activity_type,
-            std::vector<double> values,
-            std::vector<double> weights)
-         { g.dist_map_[activity_type] = EmpiricalAbsoluteDist{std::move(values), std::move(weights)}; },
-         py::arg("activity_type"),
-         py::arg("values"),
-         py::arg("weights"),
-         "Empirical absolute: draw one of your provided values, weighted by weights.")
-        .def("add_empirical_relative",
-         [](GenericDelayGenerator &g,
-            int activity_type,
-            std::vector<double> factors,
-            std::vector<double> weights)
-         { g.dist_map_[activity_type] = EmpiricalRelativeDist{std::move(factors), std::move(weights)}; },
-         py::arg("activity_type"),
-         py::arg("factors"),
-         py::arg("weights"),
-         "Empirical relative: draw a factor in [0,∞), then multiply by the activity duration.");
+        .def(
+            "add_empirical_absolute",
+            [](GenericDelayGenerator &g, int activity_type, std::vector<double> values, std::vector<double> weights) {
+                g.dist_map_[activity_type] = EmpiricalAbsoluteDist{std::move(values), std::move(weights)};
+            },
+            py::arg("activity_type"), py::arg("values"), py::arg("weights"),
+            "Empirical absolute: draw one of your provided values, weighted by weights.")
+        .def(
+            "add_empirical_relative",
+            [](GenericDelayGenerator &g, int activity_type, std::vector<double> factors, std::vector<double> weights) {
+                g.dist_map_[activity_type] = EmpiricalRelativeDist{std::move(factors), std::move(weights)};
+            },
+            py::arg("activity_type"), py::arg("factors"), py::arg("weights"),
+            "Empirical relative: draw a factor in [0,∞), then multiply by the activity duration.");
 
     // Simulator
     py::class_<Simulator>(m, "Simulator")
