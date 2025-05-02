@@ -275,6 +275,7 @@ class Simulator {
     }
 
     vector<SimResult> run_many(const vector<int> &seeds) {
+        py::gil_scoped_release release;  // <-- releases the GIL
         vector<SimResult> out;
         out.reserve(seeds.size());
         for (auto s : seeds) {

@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
@@ -173,6 +174,16 @@ class LargeScaleTest(unittest.TestCase):
         # Check some specific values
         self.assertAlmostEqual(res.realized[0], 0.0, places=6)
         self.assertAlmostEqual(res.realized[9999], 59988.0, places=6)
+
+    def test_multithreading(self):
+        generator = GenericDelayGenerator()
+        generator.add_constant(activity_type=1, factor=1.0)
+
+        batches = 4
+        sims = [Simulator(self.context, generator) for _ in range(batches)]
+        seeds_batches = [[i + j for i in range(1000)] for j in range(batches)]
+        with ThreadPoolExecutor(max_workers=batches) as pool:
+            results = list(pool.map(lambda args: args[0].run_many(args[1]), zip(sims, seeds_batches)))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 [project]
 name = "mc-dagprop"
-version = "0.3.3"
+version = "0.3.4"
 description = "Fast, Monte Carlo DAG propagation simulator with user‑defined delay distributions"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" }
@@ -21,7 +21,7 @@ plotly = "^6.0.0"
 requires = [
     "setuptools>=61.0",
     "wheel",
-    "pybind11>=2.6"
+    "pybind11>=2.13"
 ]
 build-backend = "setuptools.build_meta"
 
