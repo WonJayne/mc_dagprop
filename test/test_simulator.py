@@ -1,5 +1,6 @@
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from itertools import chain
 
 import numpy as np
 from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
@@ -183,7 +184,13 @@ class LargeScaleTest(unittest.TestCase):
         sims = [Simulator(self.context, generator) for _ in range(batches)]
         seeds_batches = [[i + j for i in range(1000)] for j in range(batches)]
         with ThreadPoolExecutor(max_workers=batches) as pool:
-            results = list(pool.map(lambda args: args[0].run_many(args[1]), zip(sims, seeds_batches)))
+            results = list(
+                chain.from_iterable(pool.map(lambda args: args[0].run_many(args[1]), zip(sims, seeds_batches)))
+            )
+            for result in results:
+                self.assertEqual(len(result.realized), 10000)
+                self.assertEqual(len(result.durations), 9999)
+                self.assertEqual(len(result.cause_event), 10000)
 
 
 if __name__ == "__main__":
