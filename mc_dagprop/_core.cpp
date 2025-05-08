@@ -153,137 +153,169 @@ class GenericDelayGenerator {
 
 // ── Simulator ────────────────────────────────────────────────────────────
 class Simulator {
-    SimContext ctx_;
-    vector<DistVar> dists_;           // flattened distributions
-    vector<SimActivity> activities_;  // length = max_link_index+1
-    vector<int> act2dist_;            // same length, -1=no-dist
+    SimContext context_;
+
+    // Delay distributions (flattened)
+    std::vector<DistVar> delay_distributions_;
+    std::unordered_map<int, int> activity_type_to_dist_index_;
+
+    // Activities: one per link index
+    std::vector<SimActivity> activities_;
+    std::vector<int> activity_to_dist_index_;  // -1 = no delay
+
+    // Precedence (CSR format)
+    std::vector<NodeIndex> flat_predecessor_sources_;  // all predecessor node indices
+    std::vector<EdgeIndex> flat_predecessor_edges_;    // corresponding edge indices
+    std::vector<size_t> predecessor_offsets_;         // prefix offsets per event
+    std::vector<NodeIndex> event_evaluation_order_;    // order in which to process events
+
+    // RNG
     RNG rng_;
-    vector<Preds> preds_by_node_;
-    vector<NodeIndex> node_indices_;  // for each event, its index
 
-    // scratch buffers
-    vector<double> earliest_allowed_, extended_durations_, realized_ts_;
-    vector<NodeIndex> cause_;
+    // Sampler function: signature(sample_rng, distribution_variant, base_duration)
+    using SamplerFunc = double(*)(RNG&, const DistVar&, double);
+    std::vector<SamplerFunc> sampler_functions_;
 
-   public:
-    Simulator(SimContext c, GenericDelayGenerator gen) : ctx_(move(c)), rng_(random_device{}()) {
-        // 1) flatten distributions -> dists_, build type→dist-index
-        unordered_map<int, int> type2idx;
-        dists_.reserve(gen.dist_map_.size());
-        auto di = 0;
-        for (auto &kv : gen.dist_map_) {
-            type2idx[kv.first] = di;
-            dists_.push_back(kv.second);
-            ++di;
+    // Scratch buffers
+    std::vector<double> earliest_times_;
+    std::vector<double> actual_durations_;
+    std::vector<double> realized_times_;
+    std::vector<NodeIndex> causing_event_index_;
+
+public:
+    Simulator(SimContext context, GenericDelayGenerator generator)
+        : context_(std::move(context)), rng_(std::random_device{}()) {
+        // 0) Validate reserved activity_type
+        if (generator.dist_map_.count(-1)) {
+            throw std::runtime_error("Activity type -1 is reserved for no delay");
         }
 
-        // 2) figure out how many links & allocate activities_ & act2dist_
-        auto max_link = 0;
-        for (auto &kv : ctx_.activity_map) {
-            max_link = max(max_link, kv.second.first);
+        // 1) Flatten distributions and build type->index map
+        delay_distributions_.reserve(generator.dist_map_.size());
+        int dist_counter = 0;
+        for (auto &entry : generator.dist_map_) {
+            activity_type_to_dist_index_[entry.first] = dist_counter;
+            delay_distributions_.push_back(entry.second);
+            ++dist_counter;
         }
-        if (max_link != int(ctx_.activity_map.size()) - 1) {
-            throw runtime_error(
-                "Mismatch between link index and activity map size check your "
-                "activity_map, indices should be 0 to N-1");
-        }
-        const auto L = max_link + 1;
-        activities_.assign(L, SimActivity{0.0, -1});
-        act2dist_.assign(L, -1);
 
-        // fill in by link_index
-        for (auto &kv : ctx_.activity_map) {
-            auto link_idx = kv.second.first;
-            const auto &activity = kv.second.second;
-            activities_[link_idx] = activity;
-            auto it = type2idx.find(activity.activity_type);
-            if (it != type2idx.end()) {
-                act2dist_[link_idx] = it->second;
+        // 2) Allocate activities and map each link to a distribution index
+        int max_link_index = -1;
+        for (auto &kv : context_.activity_map) {
+            max_link_index = std::max(max_link_index, kv.second.first);
+        }
+        int link_count = max_link_index + 1;
+        activities_.assign(link_count, SimActivity{0.0, -1});
+        activity_to_dist_index_.assign(link_count, -1);
+
+        for (auto &kv : context_.activity_map) {
+            EdgeIndex link_idx = kv.second.first;
+            activities_[link_idx] = kv.second.second;
+            auto it = activity_type_to_dist_index_.find(activities_[link_idx].activity_type);
+            if (it != activity_type_to_dist_index_.end()) {
+                activity_to_dist_index_[link_idx] = it->second;
             }
         }
 
-        // 3) build preds_by_node_
-        auto N = int(ctx_.events.size());
-        preds_by_node_.assign(N, {});
-        node_indices_.resize(N);
-        auto i = 0;
-        for (auto &p : ctx_.precedence_list) {
-            for (auto &pr : p.second) {
-                preds_by_node_[p.first].push_back(pr);
+        // 3) Build CSR for precedences
+        int event_count = int(context_.events.size());
+        predecessor_offsets_.assign(event_count + 1, 0);
+        for (auto &pr : context_.precedence_list) {
+            NodeIndex event_id = pr.first;
+            predecessor_offsets_[event_id + 1] = pr.second.size();
+        }
+        for (int i = 1; i <= event_count; ++i) {
+            predecessor_offsets_[i] += predecessor_offsets_[i - 1];
+        }
+        int total_predecessors = predecessor_offsets_[event_count];
+        flat_predecessor_sources_.resize(total_predecessors);
+        flat_predecessor_edges_.resize(total_predecessors);
+
+        std::vector<size_t> write_positions = predecessor_offsets_;
+        event_evaluation_order_.reserve(event_count);
+        for (auto &entry : context_.precedence_list) {
+            NodeIndex event_id = entry.first;
+            event_evaluation_order_.push_back(event_id);
+            for (auto &pr : entry.second) {
+                size_t idx = write_positions[event_id]++;
+                flat_predecessor_sources_[idx] = pr.first;
+                flat_predecessor_edges_[idx] = pr.second;
             }
-            node_indices_[i] = p.first;
-            ++i;
         }
 
-        // 4) scratch buffers
-        earliest_allowed_.resize(N);
-        realized_ts_.resize(N);
-        cause_.resize(N);
-        std::fill(cause_.begin(), cause_.end(), -1);
-        extended_durations_.resize(L);
+        // 4) Prepare sampler function pointers
+        sampler_functions_.resize(link_count, nullptr);
+        for (int link = 0; link < link_count; ++link) {
+            int dist_idx = activity_to_dist_index_[link];
+            if (dist_idx < 0) continue;
+            sampler_functions_[link] = [](RNG &rng, const DistVar &var, double base_dur) {
+                return std::visit([&](auto &dist) { return dist.sample(rng, base_dur); }, var);
+            };
+        }
 
-        // fill all durations that are never delayed with standard duration
-        for (auto i = 0; i < L; ++i) {
-            auto di = act2dist_[i];
-            if (di == -1) {
-                extended_durations_[i] = activities_[i].duration;
-                continue;
-            }
+        // 5) Allocate scratch buffers
+        earliest_times_.resize(event_count);
+        realized_times_.resize(event_count);
+        causing_event_index_.assign(event_count, -1);
+        actual_durations_.resize(link_count);
+
+        for (int link = 0; link < link_count; ++link) {
+            if (activity_to_dist_index_[link] < 0)
+                actual_durations_[link] = activities_[link].duration;
         }
     }
 
-    inline const int node_count() const noexcept { return int(earliest_allowed_.size()); }
-    inline const int activity_count() const noexcept { return int(extended_durations_.size()); }
+    inline int node_count() const noexcept { return int(earliest_times_.size()); }
+    inline int activity_count() const noexcept { return int(actual_durations_.size()); }
 
-    const SimResult run(const int seed) {
+    SimResult run(int seed) {
         rng_.seed(seed);
-        const int N = node_count(), activity_count_ = activity_count();
+        int E = node_count();
+        int L = activity_count();
 
-        // load earliest & scheduled
-        for (auto i = 0; i < N; ++i) {
-            realized_ts_[i] = ctx_.events[i].ts.earliest;
+        // Load earliest times
+        for (int i = 0; i < E; ++i) {
+            realized_times_[i] = context_.events[i].ts.earliest;
         }
 
-        // draw random delays
-        for (auto i = 0; i < activity_count_; ++i) {
-            auto di = act2dist_[i];
-            if (di == -1) {
-                continue;
-            }
-            auto duration = activities_[i].duration;
-            auto extra = visit([&](auto &d) { return d.sample(rng_, duration); }, dists_[di]);
-            extended_durations_[i] = duration + extra;
+        // Sample delays
+        for (int link = 0; link < L; ++link) {
+            int dist_idx = activity_to_dist_index_[link];
+            if (dist_idx < 0) continue;
+            double base_dur = activities_[link].duration;
+            double extra = sampler_functions_[link](rng_, delay_distributions_[dist_idx], base_dur);
+            actual_durations_[link] = base_dur + extra;
         }
-        // init propagate (removed cause initialization for speed-up)
-        // std::fill(cause_.begin(), cause_.end(), -1);
 
-        for (auto &n_index : node_indices_) {
-            auto latest = realized_ts_[n_index];
+        // Propagate events
+        for (NodeIndex event_id : event_evaluation_order_) {
+            double latest = realized_times_[event_id];
             NodeIndex cause = -1;
-            for (auto &pr : preds_by_node_[n_index]) {
-                auto t = realized_ts_[pr.first] + extended_durations_[pr.second];
+            for (size_t idx = predecessor_offsets_[event_id]; idx < predecessor_offsets_[event_id + 1]; ++idx) {
+                NodeIndex src = flat_predecessor_sources_[idx];
+                EdgeIndex edge = flat_predecessor_edges_[idx];
+                double t = realized_times_[src] + actual_durations_[edge];
                 if (t >= latest) {
                     latest = t;
-                    cause = pr.first;
+                    cause = src;
                 }
             }
-            realized_ts_[n_index] = latest;
-            cause_[n_index] = cause;
+            realized_times_[event_id] = latest;
+            causing_event_index_[event_id] = cause;
         }
 
-        return SimResult{realized_ts_, extended_durations_, cause_};
+        return SimResult{realized_times_, actual_durations_, causing_event_index_};
     }
 
-    vector<SimResult> run_many(const vector<int> &seeds) {
-        py::gil_scoped_release release;  // <-- releases the GIL
-        vector<SimResult> out;
-        out.reserve(seeds.size());
-        for (auto s : seeds) {
-            out.push_back(run(s));
-        }
-        return out;
+    std::vector<SimResult> run_many(const std::vector<int> &seeds) {
+        py::gil_scoped_release release;
+        std::vector<SimResult> results;
+        results.reserve(seeds.size());
+        for (int s : seeds) results.emplace_back(run(s));
+        return results;
     }
 };
+
 
 // ── Python Bindings ─────────────────────────────────────────────────────
 PYBIND11_MODULE(_core, m) {
