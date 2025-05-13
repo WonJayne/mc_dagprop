@@ -11,8 +11,7 @@ written in C++ with Python bindings via **pybind11**. It allows you to model tim
 Under the hood, we leverage the high-performance [utl::random module](https://github.com/DmitriBogdanov/UTL/blob/master/docs/module_random.md)  
 for all pseudo-random number generation—offering better speed and quality than the standard library.
 
-
-## Project Background
+## Background
 
 **mc\_dagprop** was developed as part of the
 [SORRI project](https://www.ivt.ethz.ch/en/ts/projects/sorri.html) at
@@ -37,7 +36,7 @@ which promotes innovative studies in transport management and the future of mobi
     - **Absolute**: fixed values with weights
     - **Relative**: scaling factors with weights
   - Easily extendable (Weibull, etc.)  
-- Single-run (`run(seed)`) and batch-run (`run_many([seeds])`)  
+- Single-run (`run(seed)`) and batch-run (`run_many([seeds])`), the latter releases the GIL, thus one can run it embarrassingly parallel with multithreading
 - Returns a **SimResult**: realized times, per-edge durations, and causal predecessors  
 
 > **Note:** Defining multiple distributions for the *same* `activity_type` will override previous settings.  
