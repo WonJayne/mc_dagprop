@@ -11,6 +11,18 @@ written in C++ with Python bindings via **pybind11**. It allows you to model tim
 Under the hood, we leverage the high-performance [utl::random module](https://github.com/DmitriBogdanov/UTL/blob/master/docs/module_random.md)  
 for all pseudo-random number generation—offering better speed and quality than the standard library.
 
+
+## Project Background
+
+**mc\_dagprop** was developed as part of the
+[SORRI project](https://www.ivt.ethz.ch/en/ts/projects/sorri.html) at
+the Institute for Transport Planning and Systems (IVT), ETH Zurich. The SORRI project—
+*Simulation-based Optimisation for Railway Robustness Improvement*
+—focuses on learning real-life constraints and objectives to determine timetables optimized 
+for robustness interactively. This research is supported by the
+[SBB Research Fund](https://imp-sbb-lab.unisg.ch/de/research-fund/), 
+which promotes innovative studies in transport management and the future of mobility in Switzerland.
+
 ---
 
 ## Features
@@ -64,7 +76,7 @@ events = [
 ]
 
 activities = {
-    (0, 1): (0,SimActivity(minimal_duration=60.0, activity_type=1)),
+    (0, 1): (0, SimActivity(minimal_duration=60.0, activity_type=1)),
 }
 
 precedence = [
