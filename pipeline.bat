@@ -9,7 +9,9 @@ del /q build\*.*
 
 call poetry build || exit /b
 
-call pip install dist\mc_dagprop*.whl --force-reinstall || exit /b
+for %%f in (dist\*.whl) do (
+    call pip install %%f --force-reinstall || exit /b
+)
 
 call python mc_dagprop\utils\demonstration.py || exit /b
 
