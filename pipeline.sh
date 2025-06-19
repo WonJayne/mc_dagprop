@@ -13,5 +13,5 @@ done
 
 pip install plotly
 
-python test\test_simulator.py
+python test/test_simulator.py
 
