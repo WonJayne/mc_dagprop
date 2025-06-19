@@ -173,6 +173,19 @@ Displays histograms of realized times and delays.
 
 ---
 
+## Benchmarks
+
+A lightweight benchmark helps to measure raw execution speed for a large
+simulation instance. Two delay generators are provided – one constant and
+one exponential – so you can compare different implementations against the
+same baseline and detect performance regressions.
+
+```bash
+python benchmarks/benchmark_simulator.py
+```
+
+---
+
 ## Development
 
 ```bash
