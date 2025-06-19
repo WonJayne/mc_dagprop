@@ -5,13 +5,10 @@ set -euo pipefail
 rm -f dist/*
 rm -f build/*
 
+
 poetry build
 
-for f in dist/mc_dagprop*.whl; do
-    pip install "$f" --force-reinstall
-done
-
-pip install plotly
+pip install dist/mc_dagprop*.whl --force-reinstall
 
 python test/test_simulator.py
 
