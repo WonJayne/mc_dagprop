@@ -217,12 +217,45 @@ public:
             }
         }
 
-        // 3) Build CSR for precedences
+        // 3) Build CSR for precedences and compute topological order
         int event_count = int(context_.events.size());
+
+        // build adjacency list and indegree counters
+        std::vector<std::vector<NodeIndex>> adjacency(event_count);
+        std::vector<Preds> preds_by_target(event_count);
+        std::vector<int> indegree(event_count, 0);
+        for (auto &entry : context_.precedence_list) {
+            NodeIndex tgt = entry.first;
+            preds_by_target[tgt] = entry.second;
+            indegree[tgt] = int(entry.second.size());
+            for (auto &pr : entry.second) {
+                adjacency[pr.first].push_back(tgt);
+            }
+        }
+
+        // Kahn's algorithm for topological sorting
+        event_evaluation_order_.clear();
+        event_evaluation_order_.reserve(event_count);
+        std::deque<NodeIndex> q;
+        for (int i = 0; i < event_count; ++i) {
+            if (indegree[i] == 0) q.push_back(i);
+        }
+        while (!q.empty()) {
+            NodeIndex n = q.front();
+            q.pop_front();
+            event_evaluation_order_.push_back(n);
+            for (NodeIndex dst : adjacency[n]) {
+                if (--indegree[dst] == 0) q.push_back(dst);
+            }
+        }
+        if ((int)event_evaluation_order_.size() != event_count) {
+            throw std::runtime_error("Invalid DAG: cycle detected in precedence list");
+        }
+
+        // build CSR arrays using sorted order
         predecessor_offsets_.assign(event_count + 1, 0);
-        for (auto &pr : context_.precedence_list) {
-            NodeIndex event_id = pr.first;
-            predecessor_offsets_[event_id + 1] = pr.second.size();
+        for (int i = 0; i < event_count; ++i) {
+            predecessor_offsets_[i + 1] = preds_by_target[i].size();
         }
         for (int i = 1; i <= event_count; ++i) {
             predecessor_offsets_[i] += predecessor_offsets_[i - 1];
@@ -232,11 +265,8 @@ public:
         flat_predecessor_edges_.resize(total_predecessors);
 
         std::vector<size_t> write_positions = predecessor_offsets_;
-        event_evaluation_order_.reserve(event_count);
-        for (auto &entry : context_.precedence_list) {
-            NodeIndex event_id = entry.first;
-            event_evaluation_order_.push_back(event_id);
-            for (auto &pr : entry.second) {
+        for (NodeIndex event_id : event_evaluation_order_) {
+            for (auto &pr : preds_by_target[event_id]) {
                 size_t idx = write_positions[event_id]++;
                 flat_predecessor_sources_[idx] = pr.first;
                 flat_predecessor_edges_[idx] = pr.second;

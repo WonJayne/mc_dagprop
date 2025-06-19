@@ -132,9 +132,11 @@ Represents an edge in the DAG:
 Container for your DAG:
 
 - `events`:          `List[SimEvent]`  
-- `activities`:      `Dict[(src_idx, dst_idx), SimActivity]`  
-- `precedence_list`: `List[(target_idx, [(pred_idx, link_idx), …])]`  
-- `max_delay`:       overall cap on delay propagation  
+- `activities`:      `Dict[(src_idx, dst_idx), SimActivity]`
+- `precedence_list`: `List[(target_idx, [(pred_idx, link_idx), …])]`
+- `max_delay`:       overall cap on delay propagation
+  - Can be given in any order. `Simulator` will sort topologically and raise
+    a `RuntimeError` if cycles are detected.
 
 ### `GenericDelayGenerator`
 
