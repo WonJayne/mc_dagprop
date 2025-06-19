@@ -43,7 +43,9 @@ class SimActivity:
 
 class SimContext:
     """
-    Wraps the DAG: a list of events, a map of activities, a precedence list, and a max_delay.
+    Wraps the DAG: a list of events, activities, a precedence list and a
+    max?delay. ``precedence_list`` can be in any order; ``Simulator`` sorts it
+    topologically and raises ``RuntimeError`` on cycles.
     """
 
     events: Sequence[SimEvent]
@@ -89,7 +91,9 @@ class GenericDelayGenerator:
 
 class Simulator:
     """
-    Monte Carlo DAG propagator: run single or batch simulations.
+    Monte Carlo DAG propagator: run single or batch simulations. ``precedence_list``
+    in the provided ``SimContext`` may be in any order; it is sorted topologically
+    and a ``RuntimeError`` is raised if cycles are detected.
     """
 
     def __init__(self, context: SimContext, generator: GenericDelayGenerator) -> None: ...

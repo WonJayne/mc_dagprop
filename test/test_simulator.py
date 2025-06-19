@@ -60,6 +60,30 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(res.cause_event[1], 0)
         self.assertEqual(res.cause_event[2], 1)
 
+    def test_unsorted_precedence_same_result(self):
+        unsorted = list(reversed(self.precedence_list))
+        ctx_unsorted = SimContext(
+            events=self.events,
+            activities=self.link_map,
+            precedence_list=unsorted,
+            max_delay=10.0,
+        )
+
+        gen_a = GenericDelayGenerator()
+        gen_a.add_constant(activity_type=1, factor=1.0)
+        sim_sorted = Simulator(self.context, gen_a)
+
+        gen_b = GenericDelayGenerator()
+        gen_b.add_constant(activity_type=1, factor=1.0)
+        sim_unsorted = Simulator(ctx_unsorted, gen_b)
+
+        res_sorted = sim_sorted.run(seed=7)
+        res_unsorted = sim_unsorted.run(seed=7)
+
+        np.testing.assert_allclose(res_sorted.realized, res_unsorted.realized)
+        np.testing.assert_allclose(res_sorted.durations, res_unsorted.durations)
+        np.testing.assert_array_equal(res_sorted.cause_event, res_unsorted.cause_event)
+
     def test_exponential_via_generic(self):
         gen = GenericDelayGenerator()
         gen.add_exponential(1, 1000.0, max_scale=1.0)
