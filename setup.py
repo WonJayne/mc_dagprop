@@ -1,6 +1,8 @@
 # encoding: utf-8
 # Legacy script, if you want to build without poetry etc..., just bare metal
 import sys
+from pathlib import Path
+import tomllib
 
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
@@ -30,6 +32,17 @@ else:
     platform_compile_args = ["-O3", "-std=c++20", "-flto"]
     platform_linker_args = ["-flto"]
 
+# Read version from pyproject.toml if available so that the legacy
+# setuptools build produces the same package version as the Poetry
+# build defined in ``pyproject.toml``.
+pyproject_path = Path(__file__).with_name("pyproject.toml")
+if pyproject_path.exists():
+    with pyproject_path.open("rb") as f:
+        pyproject = tomllib.load(f)
+    version = pyproject.get("project", {}).get("version", "0.5.1")
+else:
+    version = "0.5.1"
+
 ext_modules = [
     Extension(
         "mc_dagprop._core",
@@ -43,7 +56,7 @@ ext_modules = [
 
 setup(
     name="mc_dagprop",
-    version="0.0.1",
+    version=version,
     author="Florian Flükiger",
     description="Fast, Simple, Monte Carlo DAG propagation simulator with user-defined delay distributions.",
     packages=find_packages(include=["mc_dagprop*"]),
