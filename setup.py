@@ -14,8 +14,18 @@ class GetPybindInclude:
 
 
 if sys.platform == "win32":
-    platform_compile_args = ["/O2", "/std:c++20", "/GL"]
-    platform_linker_args = ["/LTCG"]
+    platform_compile_args = [
+        "/O2",  # optimize for speed
+        "/Ot",  # favor speed over size
+        "/Ob2",  # inline any suitable functions
+        "/Oi",  # generate intrinsic functions for memcpy etc.
+        "/Oy",  # omit frame pointers
+        "/fp:fast",  # fast (non-strict) floating-point
+        "/Gy",  # enable function-level linking
+        "/GL",  # whole-program optimization
+        "/std:c++20",
+    ]
+    platform_linker_args = ["/LTCG", "/INCREMENTAL:NO"]
 else:
     platform_compile_args = ["-O3", "-std=c++20", "-flto"]
     platform_linker_args = ["-flto"]
