@@ -17,4 +17,4 @@ call pip install plotly || exit /b
 
 call python mc_dagprop\utils\demonstration.py || exit /b
 
-python test\test_simulator.py || exit /b
+python -m unittest discover -s test -p "*.py" || exit /b
