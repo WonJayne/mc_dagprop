@@ -46,6 +46,8 @@ which promotes innovative studies in transport management and the future of mobi
 
 ## Installation
 
+This library requires **Python 3.12** or newer.
+
 ```bash
 # with poetry
 poetry add mc-dagprop
