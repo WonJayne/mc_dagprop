@@ -176,12 +176,19 @@ class Simulator {
     // RNG
     RNG rng_;
 
-    // Sampler function: signature(sample_rng, distribution_variant, base_duration)
-    using SamplerFunc = double(*)(RNG&, DistVar&, double);
+    // Sampler function pointer and associated distribution storage
+    using SamplerFunc = double (*)(void *, RNG &, double);
     std::vector<SamplerFunc> sampler_functions_;
+    std::vector<void *> sampler_dists_;
+
+    template <typename DistT>
+    static double call_sample(void *ptr, RNG &rng, double base) {
+        return static_cast<DistT *>(ptr)->sample(rng, base);
+    }
 
     // Scratch buffers
     std::vector<double> earliest_times_;
+    std::vector<double> base_durations_;
     std::vector<double> actual_durations_;
     std::vector<double> realized_times_;
     std::vector<NodeIndex> causing_event_index_;
@@ -279,23 +286,33 @@ public:
 
         // 4) Prepare sampler function pointers
         sampler_functions_.resize(link_count, nullptr);
+        sampler_dists_.resize(link_count, nullptr);
         for (int link = 0; link < link_count; ++link) {
             int dist_idx = activity_to_dist_index_[link];
             if (dist_idx < 0) continue;
-            sampler_functions_[link] = [](RNG &rng, DistVar &var, double base_dur) {
-                return std::visit([&](auto &dist) { return dist.sample(rng, base_dur); }, var);
-            };
+            DistVar &var = delay_distributions_[dist_idx];
+            std::visit([&](auto &dist) {
+                using DistT = std::decay_t<decltype(dist)>;
+                sampler_functions_[link] = &call_sample<DistT>;
+                sampler_dists_[link] = &dist;
+            }, var);
         }
 
         // 5) Allocate scratch buffers
         earliest_times_.resize(event_count);
         realized_times_.resize(event_count);
         causing_event_index_.assign(event_count, -1);
+        base_durations_.resize(link_count);
         actual_durations_.resize(link_count);
 
+        for (int i = 0; i < event_count; ++i) {
+            earliest_times_[i] = context_.events[i].ts.earliest;
+        }
+
         for (int link = 0; link < link_count; ++link) {
+            base_durations_[link] = activities_[link].duration;
             if (activity_to_dist_index_[link] < 0)
-                actual_durations_[link] = activities_[link].duration;
+                actual_durations_[link] = base_durations_[link];
         }
     }
 
@@ -308,17 +325,18 @@ public:
         int L = activity_count();
 
         // Load earliest times
-        for (int i = 0; i < E; ++i) {
-            realized_times_[i] = context_.events[i].ts.earliest;
-        }
+        std::copy(earliest_times_.begin(), earliest_times_.end(), realized_times_.begin());
 
         // Sample delays
         for (int link = 0; link < L; ++link) {
+            double base_dur = base_durations_[link];
             int dist_idx = activity_to_dist_index_[link];
-            if (dist_idx < 0) continue;
-            double base_dur = activities_[link].duration;
-            double extra = sampler_functions_[link](rng_, delay_distributions_[dist_idx], base_dur);
-            actual_durations_[link] = base_dur + extra;
+            if (dist_idx >= 0) {
+                double extra = sampler_functions_[link](sampler_dists_[link], rng_, base_dur);
+                actual_durations_[link] = base_dur + extra;
+            } else {
+                actual_durations_[link] = base_dur;
+            }
         }
 
         // Propagate events
