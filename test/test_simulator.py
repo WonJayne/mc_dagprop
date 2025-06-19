@@ -91,7 +91,7 @@ class TestSimulator(unittest.TestCase):
         # run with a single event
         res = sim.run_many(tuple(range(5)))[3]
 
-        # check that the durations are all 0
+        # check that the durations match the expected values
         self.assertEqual(res.durations[0], 6.0)
         self.assertEqual(res.durations[1], 10.0)
         self.assertEqual(res.durations[2], 10.0)
