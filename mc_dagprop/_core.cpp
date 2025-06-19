@@ -76,7 +76,8 @@ struct ExponentialDist {
     double lambda, max_scale;
     exponential_distribution<double> dist;
     ExponentialDist(const double lam = 1.0, const double mx = 1.0) : lambda(lam), max_scale(mx), dist(1.0 / lam) {}
-    double sample(RNG &rng, const double d) const {
+    // Sampling updates the distribution state, so this method cannot be const
+    double sample(RNG &rng, const double d) {
         double x;
         do {
             x = dist(rng);
@@ -90,7 +91,8 @@ struct GammaDist {
     gamma_distribution<double> dist;
     GammaDist(const double k = 1.0, const double s = 1.0, const double m = numeric_limits<double>::infinity())
         : shape(k), scale(s), max_scale(m), dist(k, s) {}
-    double sample(RNG &rng, const double d) const {
+    // Sampling updates the distribution state, so this method cannot be const
+    double sample(RNG &rng, const double d) {
         double x;
         do {
             x = dist(rng);
@@ -116,7 +118,8 @@ struct EmpiricalAbsoluteDist {
         dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
     }
 
-    double sample(RNG &rng, double /*duration*/) const { return values[dist(rng)]; }
+    // Sampling draws from the distribution and mutates its state
+    double sample(RNG &rng, double /*duration*/) { return values[dist(rng)]; }
 };
 
 // 2) Relative: user‐supplied factors in [0..∞), multiplied by the base duration
@@ -130,8 +133,9 @@ struct EmpiricalRelativeDist {
         dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
     }
 
-    double sample(RNG &rng, double duration) const { return factors[dist(rng)] * duration; }
-};
+    // Sampling draws from the distribution and mutates its state
+    double sample(RNG &rng, double duration) { return factors[dist(rng)] * duration; }
+}; 
 
 using DistVar = std::variant<ConstantDist, ExponentialDist, GammaDist, EmpiricalAbsoluteDist, EmpiricalRelativeDist>;
 
@@ -173,7 +177,7 @@ class Simulator {
     RNG rng_;
 
     // Sampler function: signature(sample_rng, distribution_variant, base_duration)
-    using SamplerFunc = double(*)(RNG&, const DistVar&, double);
+    using SamplerFunc = double(*)(RNG&, DistVar&, double);
     std::vector<SamplerFunc> sampler_functions_;
 
     // Scratch buffers
@@ -278,7 +282,7 @@ public:
         for (int link = 0; link < link_count; ++link) {
             int dist_idx = activity_to_dist_index_[link];
             if (dist_idx < 0) continue;
-            sampler_functions_[link] = [](RNG &rng, const DistVar &var, double base_dur) {
+            sampler_functions_[link] = [](RNG &rng, DistVar &var, double base_dur) {
                 return std::visit([&](auto &dist) { return dist.sample(rng, base_dur); }, var);
             };
         }
