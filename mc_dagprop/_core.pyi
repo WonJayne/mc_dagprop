@@ -43,7 +43,7 @@ class SimActivity:
 
 class SimContext:
     """
-    Wraps the DAG: a list of events, a map of activities, a precedence list, and a max?delay.
+    Wraps the DAG: a list of events, a map of activities, a precedence list, and a max_delay.
     """
 
     events: Sequence[SimEvent]
