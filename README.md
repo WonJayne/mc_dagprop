@@ -48,10 +48,10 @@ which promotes innovative studies in transport management and the future of mobi
 
 ```bash
 # with poetry
-poetry add mc_dagprop
+poetry add mc-dagprop
 
 # or with pip
-pip install mc_dagprop
+pip install mc-dagprop
 ```
 
 ---
@@ -131,8 +131,8 @@ Represents an edge in the DAG:
 
 Container for your DAG:
 
-- `events`:          `List[SimEvent]`  
-- `activities`:      `Dict[(src_idx, dst_idx), SimActivity]`
+- `events`:          `List[SimEvent]`
+- `activities`:      `Dict[(src_idx, dst_idx), (link_idx, SimActivity)]`
 - `precedence_list`: `List[(target_idx, [(pred_idx, link_idx), …])]`
 - `max_delay`:       overall cap on delay propagation
   - Can be given in any order. `Simulator` will sort topologically and raise

@@ -72,7 +72,8 @@ class SimResult:
 
 class GenericDelayGenerator:
     """
-    Configurable delay generator: constant or exponential per activity_type.
+    Configurable delay generator. Supports per-``activity_type`` distributions:
+    constant, exponential, gamma, and empirical (absolute or relative).
     """
 
     def __init__(self) -> None: ...
