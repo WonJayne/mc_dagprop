@@ -167,7 +167,7 @@ Configurable delay factory (one distribution per `activity_type`):
 ## Visualization Demo
 
 ```bash
-pip install plotly
+pip install mc-dagprop[plot]
 python -m mc_dagprop.utils.demonstration
 ```
 

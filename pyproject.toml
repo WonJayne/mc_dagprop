@@ -14,8 +14,9 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 numpy = "^2.0.0"
-plotly = "^6.0.0"
 
+[tool.poetry.extras]
+plot = ["plotly"]
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
