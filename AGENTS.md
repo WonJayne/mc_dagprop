@@ -1,6 +1,6 @@
 ---
 
-# Agents.md
+# AGENTS.md
 
 ## Guidelines for Automated Agents Contributing to This Codebase
 
