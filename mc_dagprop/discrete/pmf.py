@@ -85,6 +85,11 @@ class DiscretePMF:
     def truncate_right(self, max_value: float) -> "DiscretePMF":
         if max_value >= self.values[-1]:
             return self
+        if max_value <= self.values[0]:
+            return DiscretePMF(
+                np.array([max_value], dtype=float),
+                np.array([1.0], dtype=float),
+            )
         idx = np.searchsorted(self.values, max_value, side="right") - 1
         new_vals = self.values[: idx + 1]
         new_probs = self.probs[: idx + 1]
