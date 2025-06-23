@@ -199,7 +199,9 @@ This computes event-time PMFs deterministically without Monte-Carlo sampling.
 
 The ``step_size`` sets the spacing for all values in the discrete PMFs.
 ``DiscreteSimulator`` invokes ``AnalyticContext.validate()`` at construction
-time and will raise an error when any edge uses a different step.
+time and will raise an error when any edge uses a different step.  All PMF
+value grids must therefore have constant spacing equal to ``step_size`` and
+start on a multiple of that step.
 Each ``ScheduledEvent`` may specify ``bounds=(lower, upper)`` to clip the
 resulting distribution. The ``run()`` method returns a sequence of
 ``SimulatedEvent`` objects which hold the resulting PMF and the under- and

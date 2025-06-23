@@ -90,6 +90,18 @@ class TestDiscreteSimulator(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
 
+    def test_misaligned_values(self) -> None:
+        act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.5]), np.array([0.5, 0.5])))
+        ctx = AnalyticContext(
+            events=self.events,
+            activities={(0, 1): (0, act0)},
+            precedence_list=((1, ((0, 0),)),),
+            max_delay=5.0,
+            step_size=1.0,
+        )
+        with self.assertRaises(ValueError):
+            create_discrete_simulator(ctx)
+
     def test_bounds_and_overflow(self) -> None:
         events = (
             ScheduledEvent("0", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 0.0)),

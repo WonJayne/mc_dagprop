@@ -45,6 +45,20 @@ class DiscretePMF:
         if not np.isclose(self.probs.sum(), 1.0):
             raise ValueError("probabilities must sum to 1.0")
 
+    def validate_alignment(self, step: Second) -> None:
+        """Ensure that ``values`` align with ``step`` spacing."""
+
+        if step <= 0.0:
+            raise ValueError("step must be positive")
+
+        if len(self.values) > 1:
+            diffs = np.diff(self.values)
+            if not np.allclose(diffs, step):
+                raise ValueError("PMF grid spacing does not match step")
+
+        if self.values.size > 0 and not np.isclose(self.values[0] % step, 0.0):
+            raise ValueError("PMF values are not aligned to step grid")
+
     # Step should be a static property, defined on init. Again, something that we can validate in a separate method.
     @property
     def step(self) -> Second:
