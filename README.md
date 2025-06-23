@@ -203,7 +203,8 @@ time and will raise an error when any edge uses a different step.
 Each ``ScheduledEvent`` may specify ``bounds=(lower, upper)`` to clip the
 resulting distribution. The ``run()`` method returns a sequence of
 ``SimulatedEvent`` objects which hold the resulting PMF and the under- and
-overflow mass for that event.
+overflow mass for that event. Events without predecessors are deterministic and
+their PMFs collapse to a single value at the earliest bound.
 By default the step size is ``1.0`` second and typical delay deviations range
 roughly from ``-180`` s up to ``+1800`` s.
 

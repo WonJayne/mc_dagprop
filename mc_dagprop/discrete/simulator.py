@@ -61,7 +61,8 @@ class DiscreteSimulator:
 
         Each node's distribution is derived from its predecessors and the
         result is returned as a tuple of :class:`SimulatedEvent` objects in
-        original order.
+        original order. Nodes without incoming edges are deterministic and
+        their PMF collapses to a delta at the event's earliest timestamp.
         """
         n_events = len(self.context.events)
         # NOTE[codex]: We need index-based lookup for predecessors. Using a

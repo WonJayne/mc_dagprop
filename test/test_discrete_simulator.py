@@ -67,6 +67,16 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(np.allclose(final.probs, [0.25, 0.5, 0.25], atol=0.05))
         self.assertTrue(np.allclose(mc_probs, final.probs, atol=0.05))
 
+    def test_event_without_predecessor(self) -> None:
+        ds = create_discrete_simulator(self.a_context)
+        events = ds.run()
+        first = events[0].pmf
+        earliest = self.events[0].timestamp.earliest
+        self.assertTrue(np.allclose(first.values, [earliest]))
+        self.assertTrue(np.allclose(first.probs, [1.0]))
+        mc_res = self.mc_sim.run(seed=0)
+        self.assertEqual(mc_res.cause_event[0], -1)
+
     def test_mismatched_step_size(self) -> None:
         act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5])))
         act1 = AnalyticEdge(DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5])))
