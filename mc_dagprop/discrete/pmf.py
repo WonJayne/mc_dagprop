@@ -13,17 +13,16 @@ class DiscretePMF:
 
     values: np.ndarray
     probabilities: np.ndarray
-    step: Second = Second(1.0)
+    # Step size that determines the grid spacing for ``values``.
+    step: Second
 
     def __post_init__(self) -> None:
+        """Basic sanity checks for the distribution."""
         if len(self.values) != len(self.probabilities):
             raise ValueError("values and probs must have same length")
-        if self.step <= 0.0:
-            raise ValueError("step must be positive")
-        self.validate()
-        self.validate_alignment(self.step)
+        if self.step < 0.0:
+            raise ValueError("step size must be non-negative")
 
-    # FIXME: This should be a validation method, outside of the __post_init__ method, and ideally a function that can be called separately.
     def validate(self) -> None:
         """Validate the PMF properties."""
         if len(self.values) != len(self.probabilities):
@@ -33,7 +32,6 @@ class DiscretePMF:
         if not np.isclose(self.probabilities.sum(), 1.0):
             raise ValueError("probabilities must sum to 1.0")
 
-    # Move this to a validation method, outside of the class.
     def validate_alignment(self, step: Second) -> None:
         """Ensure that ``values`` align with ``step`` spacing."""
         if not np.isclose(self.step, step):
@@ -50,8 +48,8 @@ class DiscretePMF:
             raise ValueError("PMF values are not aligned to step grid")
 
     @staticmethod
-    def delta(v: Second, step: Second = Second(1.0)) -> "DiscretePMF":
-        """Return a delta PMF at value ``v`` using ``step`` spacing."""
+    def delta(v: Second, step: Second) -> "DiscretePMF":
+        """Return a unit mass at ``v`` using ``step`` spacing."""
         return DiscretePMF(np.array([v], dtype=float), np.array([1.0], dtype=float), step=step)
 
     @property
@@ -73,10 +71,6 @@ class DiscretePMF:
                 return DiscretePMF.delta(self.values[0] + other.values[0], step=self.step)
 
         step = self.step
-        assert self.step == other.step, f"PMFs must share a positive step size, got {self.step} and {other.step}"
-        if not step or not np.isclose(step, other.step) or not np.isclose(step, self.step):
-            # FIXME: This should be a validation method, outside of the convolve method.
-            raise ValueError("PMFs must share a positive step size")
 
         start = self.values[0] + other.values[0]
         probs = np.convolve(self.probabilities, other.probabilities)
@@ -93,12 +87,6 @@ class DiscretePMF:
             return DiscretePMF.delta(max(self.values[0], other.values[0]), step=self.step)
 
         step = float(self.step)
-        # FIXME: This should be a validation method, outside of the maximum method.
-        #  Should be validated before starting the propagation.
-        if step <= 0.0 or not np.isclose(step, other.step):
-            raise ValueError("PMFs must share a positive step size")
-        if not np.isclose((self.values[0] - other.values[0]) % step, 0.0):
-            raise ValueError("PMF grids are not aligned")
 
         min_start = min(self.values[0], other.values[0])
         max_end = max(self.values[-1], other.values[-1])

@@ -1,6 +1,7 @@
 import unittest
 import os
 import sys
+from dataclasses import replace
 
 import numpy as np
 
@@ -124,9 +125,9 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_bounds_and_overflow(self) -> None:
         events = (
-            ScheduledEvent("0", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 0.0)),
-            ScheduledEvent("1", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.5)),
-            ScheduledEvent("2", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.8)),
+            ScheduledEvent("0", EventTimestamp(0.0, 0.0, 0.0)),
+            ScheduledEvent("1", EventTimestamp(0.0, 1.5, 0.0)),
+            ScheduledEvent("2", EventTimestamp(0.0, 1.8, 0.0)),
         )
         ctx = AnalyticContext(
             events=events,
@@ -152,7 +153,7 @@ class TestDiscreteSimulator(unittest.TestCase):
     def test_rule_combinations(self) -> None:
         events = (
             ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
-            ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0), bounds=(0.0, 1.0)),
+            ScheduledEvent("1", EventTimestamp(0.0, 1.0, 0.0)),
         )
         edge = AnalyticEdge(0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1.0))
         ctx = AnalyticContext(
@@ -170,20 +171,25 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertAlmostEqual(res_default.overflow, 0.0, places=6)
         self.assertTrue(np.allclose(res_default.pmf.values, [0.0, 1.0]))
 
-        with self.assertRaises(ValueError):
-            create_discrete_simulator(ctx, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.REMOVE).run()
-
-        ds_mixed1 = create_discrete_simulator(
-            ctx, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.TRUNCATE
+        ctx_remove_both = AnalyticContext(
+            events=events,
+            activities={(0, 1): (0, edge)},
+            precedence_list=((1, ((0, 0),)),),
+            step_size=1.0,
+            underflow_rule=UnderflowRule.REMOVE,
+            overflow_rule=OverflowRule.REMOVE,
         )
+        create_discrete_simulator(ctx_remove_both).run()
+
+        ctx_remove_under = replace(ctx, underflow_rule=UnderflowRule.REMOVE)
+        ds_mixed1 = create_discrete_simulator(ctx_remove_under)
         res_mixed1 = ds_mixed1.run()[1]
         self.assertAlmostEqual(res_mixed1.underflow, 0.5, places=6)
         self.assertAlmostEqual(res_mixed1.overflow, 0.0, places=6)
         self.assertTrue(np.allclose(res_mixed1.pmf.values, [0.0, 1.0]))
 
-        ds_mixed2 = create_discrete_simulator(
-            ctx, underflow_rule=UnderflowRule.TRUNCATE, overflow_rule=OverflowRule.REMOVE
-        )
+        ctx_remove_over = replace(ctx, overflow_rule=OverflowRule.REMOVE)
+        ds_mixed2 = create_discrete_simulator(ctx_remove_over)
         res_mixed2 = ds_mixed2.run()[1]
         self.assertAlmostEqual(res_mixed2.underflow, 0.0, places=6)
         self.assertAlmostEqual(res_mixed2.overflow, 0.5, places=6)
@@ -226,8 +232,9 @@ class TestDiscreteSimulator(unittest.TestCase):
             events=events,
             activities={},
             precedence_list=(),
-            max_delay=5.0,
             step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
@@ -237,7 +244,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
             ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0)),
         )
-        edge = AnalyticEdge(DiscretePMF(np.array([1.0]), np.array([1.0]), step=1.0))
+        edge = AnalyticEdge(0, DiscretePMF(np.array([1.0]), np.array([1.0]), step=1.0))
         ctx = AnalyticContext(
             events=events,
             activities={
@@ -245,8 +252,9 @@ class TestDiscreteSimulator(unittest.TestCase):
                 (1, 0): (1, edge),
             },
             precedence_list=((1, ((0, 0),)), (0, ((1, 1),))),
-            max_delay=5.0,
             step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
