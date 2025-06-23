@@ -5,17 +5,9 @@ from __future__ import annotations
 
 import random
 import time
-from typing import Iterable
+from collections.abc import Iterable
 
-from mc_dagprop import (
-    EventTimestamp,
-    GenericDelayGenerator,
-    SimActivity,
-    SimContext,
-    SimEvent,
-    Simulator,
-)
-
+from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
 
 # Use a reasonably large graph similar to the one used in the tests
 N_NODES = 10_000
@@ -68,17 +60,13 @@ def main() -> None:
     c_single = benchmark_run(constant_sim, seeds * batches)
     print(f"Constant delay: {len(seeds) * batches} sequential runs took {c_single:.3f} s")
     c_batch = benchmark_run_many(constant_sim, batches, seeds)
-    print(
-        f"Constant delay: {batches} batched runs of {len(seeds)} seeds took {c_batch:.3f} s"
-    )
+    print(f"Constant delay: {batches} batched runs of {len(seeds)} seeds took {c_batch:.3f} s")
 
     exp_sim = build_exponential_sim(ctx)
     e_single = benchmark_run(exp_sim, seeds * batches)
     print(f"Exponential delay: {len(seeds) * batches} sequential runs took {e_single:.3f} s")
     e_batch = benchmark_run_many(exp_sim, batches, seeds)
-    print(
-        f"Exponential delay: {batches} batched runs of {len(seeds)} seeds took {e_batch:.3f} s"
-    )
+    print(f"Exponential delay: {batches} batched runs of {len(seeds)} seeds took {e_batch:.3f} s")
 
 
 if __name__ == "__main__":

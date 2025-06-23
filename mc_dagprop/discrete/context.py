@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 
@@ -11,7 +11,7 @@ from .pmf import DiscretePMF
 
 NodeIndex = int
 EdgeIndex = int
-Pred = Tuple[NodeIndex, EdgeIndex]
+Pred = tuple[NodeIndex, EdgeIndex]
 
 
 @dataclass
@@ -22,8 +22,8 @@ class AnalyticEdge:
 @dataclass
 class AnalyticContext:
     events: List[SimEvent]
-    activities: Dict[Tuple[NodeIndex, NodeIndex], Tuple[EdgeIndex, AnalyticEdge]]
-    precedence_list: List[Tuple[NodeIndex, List[Pred]]]
+    activities: Dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
+    precedence_list: List[tuple[NodeIndex, List[Pred]]]
     max_delay: float = 0.0
     step_size: float = 0.0
 
