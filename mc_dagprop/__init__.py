@@ -22,6 +22,8 @@ from .discrete import (
     ScheduledEvent,
     SimulatedEvent,
     DiscretePMF,
+    UnderflowRule,
+    OverflowRule,
     DiscreteSimulator,
     create_discrete_simulator,
 )
@@ -40,6 +42,8 @@ __all__ = [
     "DiscretePMF",
     "ScheduledEvent",
     "SimulatedEvent",
+    "UnderflowRule",
+    "OverflowRule",
     "AnalyticContext",
     "DiscreteSimulator",
     "create_discrete_simulator",
