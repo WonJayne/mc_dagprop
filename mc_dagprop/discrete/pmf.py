@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 
 import numpy as np
+# Some comments on the code, things to improve or change:
+# TODO: Define a custum type, Second, that is a float, but has a unit of seconds, which we can use in the future.
+# TODO: Define a custom type, Probability, that is a float, but has a unit of probability, which we can use in the future.
 
+# Please use from __future__ import annotations to ensure that the type hints are better readable
 
-@dataclass
+@dataclass(frozen=True, slots=True,)
 class DiscretePMF:
     """Simple probability mass function on an equidistant grid."""
 
@@ -17,11 +20,18 @@ class DiscretePMF:
         if len(self.values) != len(self.probs):
             raise ValueError("values and probs must have same length")
         if not np.isclose(self.probs.sum(), 1.0):
+            # FIXME: This is not something we should be doing here, as this is causing behavioral changes.
+            # We can raise an error instead
             self.probs = self.probs / self.probs.sum()
+
+        # FIXME Wouldn't it be better to just expect sorted values? I would instead have a validate method,
+        #  that checks if the values are sorted. and if the probs are normalized.
         order = np.argsort(self.values)
         self.values = self.values[order]
         self.probs = self.probs[order]
         # merge identical values
+
+        # TODO: SAme as above, this is not something we should be doing here.
         uniq, indices = np.unique(self.values, return_inverse=True)
         if len(uniq) != len(self.values):
             agg = np.zeros_like(uniq, dtype=float)
@@ -29,6 +39,7 @@ class DiscretePMF:
             self.values = uniq
             self.probs = agg
 
+    # Step should be a static property, defined on init. Again, someting that we can validate in a separate method.
     @property
     def step(self) -> float:
         if len(self.values) < 2:
@@ -104,4 +115,7 @@ class DiscretePMF:
         if new_vals.size == 0:
             new_vals = np.array([min_value], dtype=float)
             new_probs = np.array([0.0], dtype=float)
+        # Here we might need to normalize the probabilities again?
+        # FIXME: also, here we should then call assert object.validate() to ensure the PMF is valid,
+        #  but we can use -OO to skip this check in production.
         return DiscretePMF(new_vals, new_probs), under, over

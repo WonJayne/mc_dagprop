@@ -5,7 +5,7 @@ from collections import deque
 from .context import AnalyticContext
 from .pmf import DiscretePMF
 
-
+# TODO: Make this a dataclass with frozen, slots etc
 class DiscreteSimulator:
     """Propagate discrete PMFs through a DAG."""
 
@@ -15,15 +15,16 @@ class DiscreteSimulator:
         self._build_topology()
 
     def _build_topology(self) -> None:
+        # TODO: Move this on a factory or a separate method, that reutrns a DiscreteSimulator
         event_count = len(self.context.events)
         adjacency = [[] for _ in range(event_count)]
         indegree = [0] * event_count
         preds_by_target = [None] * event_count
-        for tgt, preds in self.context.precedence_list:
-            preds_by_target[tgt] = preds
-            indegree[tgt] = len(preds)
-            for src, _ in preds:
-                adjacency[src].append(tgt)
+        for target, predecessor in self.context.precedence_list:
+            preds_by_target[target] = predecessor
+            indegree[target] = len(predecessor)
+            for src, _ in predecessor:
+                adjacency[src].append(target)
         order: list[int] = []
         q = deque(i for i, deg in enumerate(indegree) if deg == 0)
         while q:
@@ -38,7 +39,9 @@ class DiscreteSimulator:
         self._preds_by_target = preds_by_target
         self.order = order
 
-    def run(self) -> list[DiscretePMF]:
+    def run(self) -> tuple[DiscretePMF, ...]:
+        # FIXME: here, I would expect to get a tuple of simulated Events, each with a PMF.
+
         n_events = len(self.context.events)
         event_pmfs: list[DiscretePMF] = [None] * n_events  # type: ignore
         under: list[float] = [0.0] * n_events
@@ -61,6 +64,8 @@ class DiscreteSimulator:
             under[idx] = u
             over[idx] = o
             event_pmfs[idx] = pmf
+        # FIXME: Over and underflow should be given to the individual events, as this allows the user to
+        #  investigate the propagation of the PMF in more detail.
         self.underflow = under
         self.overflow = over
         return event_pmfs
