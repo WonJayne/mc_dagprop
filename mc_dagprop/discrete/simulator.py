@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from typing import cast
 
 from .context import AnalyticContext, Pred, SimulatedEvent
 from .pmf import DiscretePMF, Probability
@@ -57,7 +58,10 @@ class DiscreteSimulator:
 
     def run(self) -> tuple[SimulatedEvent, ...]:
         n_events = len(self.context.events)
-        events: list[SimulatedEvent] = [None] * n_events  # type: ignore
+        # NOTE[codex]: We need index-based lookup for predecessors. Using a
+        # simple append-only list would break because event indices are not
+        # guaranteed to match the processing order.
+        events: dict[int, SimulatedEvent] = {}
         for idx in self.order:
             ev = self.context.events[idx]
             base = DiscretePMF.delta(ev.timestamp.earliest)
@@ -74,4 +78,5 @@ class DiscreteSimulator:
             lb, ub = ev.bounds
             pmf, u, o = pmf.truncate(lb, ub)
             events[idx] = SimulatedEvent(pmf, u, o)
-        return tuple(events)
+
+        return tuple(events[i] for i in range(n_events))

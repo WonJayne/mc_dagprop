@@ -17,7 +17,7 @@ from mc_dagprop import (
     Simulator,
     create_discrete_simulator,
 )
-from mc_dagprop.discrete.context import AnalyticEdge
+from mc_dagprop.discrete.context import AnalyticEdge, SimulatedEvent
 
 
 class TestDiscreteSimulator(unittest.TestCase):
@@ -58,6 +58,7 @@ class TestDiscreteSimulator(unittest.TestCase):
     def test_compare_to_monte_carlo(self) -> None:
         ds = create_discrete_simulator(self.a_context)
         events = ds.run()
+        self.assertTrue(all(isinstance(ev, SimulatedEvent) for ev in events))
         final = events[2].pmf
         samples = [self.mc_sim.run(seed=i).realized[2] for i in range(2000)]
         counts = np.bincount(np.array(samples, dtype=int))[1:4]
@@ -97,8 +98,10 @@ class TestDiscreteSimulator(unittest.TestCase):
         )
         ds = create_discrete_simulator(ctx)
         events_res = ds.run()
+        self.assertTrue(all(isinstance(ev, SimulatedEvent) for ev in events_res))
         self.assertAlmostEqual(events_res[1].overflow, 0.5, places=6)
         self.assertAlmostEqual(events_res[2].overflow, 0.5, places=6)
+        self.assertGreaterEqual(events_res[2].overflow, events_res[1].overflow)
         self.assertAlmostEqual(sum(e.overflow for e in events_res), 1.0, places=6)
         self.assertTrue(np.all(events_res[1].pmf.values <= 1.5))
         self.assertTrue(np.all(events_res[2].pmf.values <= 1.8))

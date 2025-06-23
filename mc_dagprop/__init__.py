@@ -23,6 +23,8 @@ except ModuleNotFoundError:  # pragma: no cover - optional native module
             if os.path.isdir(cand):
                 matches = glob.glob(os.path.join(cand, "_core.*"))
                 if matches:
+                    # Prefer the compiled extension if available.
+                    matches.sort(key=lambda p: 0 if p.endswith(".so") else 1)
                     core_path = matches[0]
                     break
         if core_path is None:
