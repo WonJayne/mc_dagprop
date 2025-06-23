@@ -1,77 +1,79 @@
+---
+
 # Agents.md
 
-## 🧠 Guidelines for Automated Agents Editing This Codebase
+## Guidelines for Automated Agents Contributing to This Codebase
 
-This document defines coding principles that **must be respected** by automated agents contributing to this repository (e.g., Codex, Copilot, GPT-based assistants).
+This document defines mandatory standards for any automated agent (e.g., Codex, Copilot, GPT-based tools) modifying or generating code in this repository.
 
----
-
-### 1. ✅ Code Quality Principles
-
-* **Write maintainable code**: Solutions should favor **clarity over cleverness** and **consistency over novelty**.
-* **Use descriptive and non-embarrassing identifiers**:
-
-  * Variables like `tmp`, `data`, `foo`, `var123`, or `lol` are prohibited unless clearly justified.
-  * Prefer `train_departure_time` over `tdt` unless context demands brevity.
-* **No magic numbers or strings**: Use constants or enums.
+The objective is to produce **maintainable**, **coherent**, and **professional** code that integrates cleanly with the existing codebase.
 
 ---
 
-### 2. 💡 Design Philosophy
+### 1. Code Quality and Naming
 
-* **Prefer strong coupling, low cohesion**:
+* Use clear, descriptive, and professional variable and function names.
 
-  * Related logic should live together.
-  * Do not scatter functionality across loosely connected utility files.
-* **Minimize duplication**:
-
-  * Reuse abstractions, define shared helpers, respect DRY (Don't Repeat Yourself).
-  * Copy-pasting code with minor tweaks is forbidden.
+  * Avoid ambiguous or lazy names (e.g., `tmp`, `foo`, `data1`, etc.).
+  * Never generate names that sound careless or unintelligent.
+* Avoid magic constants. Use named constants or enumerations.
+* Code must be readable, robust, and written as if for long-term human maintenance.
 
 ---
 
-### 3. 🧱 Structure and Style
+### 2. Design Principles
 
-* Respect project structure and file naming conventions.
-* Keep functions short (≤ 40 LOC is a good default). Refactor if they grow too large.
-* Use type annotations (in Python), const correctness (in C++), etc.
-* Comments must explain *why*, not *what*, unless code is non-obvious.
-
----
-
-### 4. 🧪 Testing and Robustness
-
-* Every non-trivial function must be testable.
-* Do not silently catch exceptions or suppress errors without logging or justification.
-* Fail loudly when assumptions are violated unless otherwise documented.
+* **Explicit beats implicit**: Be clear in logic, typing, and control flow.
+* **Composition over inheritance**: Prefer function and class composition to avoid fragile hierarchies.
+* **High cohesion, low coupling**: Group related logic tightly. Minimize interdependencies between unrelated components.
+* Eliminate unnecessary duplication. Follow DRY (Don't Repeat Yourself).
+* Avoid premature generalization. Abstract only when justified by clear reuse.
 
 ---
 
-### 5. 📚 Documentation
+### 3. Python-Specific Requirements
 
-* All public functions and classes must have a docstring or comment block.
-* Document side effects and expectations (e.g., mutability, I/O).
-
----
-
-### 6. 🚫 Anti-Patterns (Never Do This)
-
-* Don’t invent DSLs unless absolutely necessary.
-* Don’t name everything `manager`, `handler`, or `util`.
-* Avoid `print` for debugging—use logging or tracing frameworks.
-* Don’t add TODOs you don’t intend to fix.
+* Type hints are **mandatory**. Follow standards from Python 3.13 and newer.
+* Use `dataclasses` or `namedtuples` to structure related data clearly.
+* Avoid legacy or implicit patterns (e.g., duck typing without validation).
+* Follow [PEP 8](https://peps.python.org/pep-0008/) and [PEP 484](https://peps.python.org/pep-0484/) consistently.
 
 ---
 
-### 7. 🤖 Agent-Specific Rules
+### 4. Structure and Style
 
-* If unsure, **ask** (via prompt or comment) instead of assuming.
-* Leave notes (`# NOTE[agent-name]:`) to clarify uncertain decisions.
-* If refactoring, preserve behavior unless explicitly told otherwise.
-
----
-
-**Remember**: Your output will be read and maintained by humans. Write accordingly.
+* Respect the existing project layout and file boundaries.
+* Functions should be focused, short, and do one thing well.
+* Minimize unnecessary indirection or abstraction.
+* Comment only when necessary. Prioritize explaining *why*, not *what*.
 
 ---
 
+### 5. Robustness and Testing
+
+* All meaningful logic must be testable.
+* Never silently suppress exceptions. Validate assumptions explicitly.
+* Handle edge cases deliberately.
+* Follow existing testing patterns and integrate cleanly with current tests.
+
+---
+
+### 6. Documentation
+
+* Document all public classes, functions, and modules with clear purpose, input/output types, and behavioral expectations.
+* Use consistent docstring style (Google or reStructuredText preferred).
+
+---
+
+### 7. Agent-Specific Conduct
+
+* If uncertain, insert comments using `# NOTE[agent]:` to clarify intent or highlight ambiguity.
+* Do not introduce speculative changes or vague TODOs.
+* Preserve intended behavior unless explicitly instructed otherwise.
+* Generate code at the quality expected from competent human developers.
+
+---
+
+**Maintainability, clarity, and professionalism are required. No exceptions.**
+
+---
