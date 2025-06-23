@@ -91,7 +91,11 @@ class DiscretePMF:
         return DiscretePMF(values, probs)
 
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
-        """Return the distribution of ``max(X, Y)`` for two independent PMFs."""
+        """Return ``max(X, Y)`` for two independent PMFs.
+
+        This operation is used by :class:`DiscreteSimulator` to combine delay
+        distributions when an event has multiple predecessors.
+        """
         if len(self.values) == 1 and len(other.values) == 1:
             return DiscretePMF.delta(max(self.values[0], other.values[0]))
 
@@ -121,70 +125,3 @@ class DiscretePMF:
         probs = np.diff(np.concatenate(([0.0], cdf_max)))
         return DiscretePMF(grid, probs)
 
-    def minimum(self, other: "DiscretePMF") -> "DiscretePMF":
-        """Return the distribution of ``min(X, Y)`` for two independent PMFs."""
-        if len(self.values) == 1 and len(other.values) == 1:
-            return DiscretePMF.delta(min(self.values[0], other.values[0]))
-
-        step = float(self.step)
-        if step <= 0.0 or not np.isclose(step, other.step):
-            raise ValueError("PMFs must share a positive step size")
-        if not np.isclose((self.values[0] - other.values[0]) % step, 0.0):
-            raise ValueError("PMF grids are not aligned")
-
-        min_start = min(self.values[0], other.values[0])
-        max_end = max(self.values[-1], other.values[-1])
-        grid = np.arange(min_start, max_end + step, step)
-
-        offset_self = int(round((self.values[0] - min_start) / step))
-        offset_other = int(round((other.values[0] - min_start) / step))
-
-        pmf_self = np.zeros(len(grid))
-        pmf_other = np.zeros(len(grid))
-        pmf_self[offset_self : offset_self + len(self.probabilities)] = self.probabilities
-        pmf_other[offset_other : offset_other + len(other.probabilities)] = other.probabilities
-
-        cdf_self = np.cumsum(pmf_self)
-        cdf_other = np.cumsum(pmf_other)
-        # FIXME: if we allow the trimming of PMFs (dropping values outside of the range), they might no longer be adding up to 1.0
-        cdf_min = 1.0 - (1.0 - cdf_self) * (1.0 - cdf_other)
-        probabilities = np.diff(np.concatenate(([0.0], cdf_min)))
-        return DiscretePMF(grid, probabilities)
-
-    # FIXME not used? Candidate for removal?
-    def truncate_right(self, max_value: Second) -> "DiscretePMF":
-        no_need_to_truncate = max_value >= self.values[-1]
-        if no_need_to_truncate:
-            return self
-        entirely_truncated = max_value <= self.values[0]
-        if entirely_truncated:
-            pmf = DiscretePMF(np.array([max_value], dtype=float), np.array([1.0], dtype=float))
-            # FIXME: This should be a validation method, outside of the truncate_right method.
-            pmf.validate()
-            return pmf
-        idx = np.searchsorted(self.values, max_value, side="right") - 1
-        new_vals = self.values[: idx + 1]
-        new_probabilities = self.probabilities[: idx + 1]
-        overflow = self.probabilities[idx + 1 :].sum()
-        new_probabilities[-1] += overflow
-        new_probabilities = new_probabilities / new_probabilities.sum()
-        pmf = DiscretePMF(new_vals, new_probabilities)
-        # FIXME: This should be a validation method, outside of the truncate_right method.
-        pmf.validate()
-        return pmf
-
-    # FIXME not used? Candidate for removal?
-    def truncate(self, min_value: Second, max_value: Second) -> tuple["DiscretePMF", ProbabilityMass, ProbabilityMass]:
-        """Truncate the PMF to ``[min_value, max_value]`` and return under/overflow mass."""
-        under = ProbabilityMass(self.probabilities[self.values < min_value].sum())
-        over = ProbabilityMass(self.probabilities[self.values > max_value].sum())
-        mask = (self.values >= min_value) & (self.values <= max_value)
-        new_vals = self.values[mask]
-        new_probs = self.probabilities[mask]
-        if new_vals.size == 0:
-            new_vals = np.array([min_value], dtype=float)
-            new_probs = np.array([0.0], dtype=float)
-        new_probs = new_probs / new_probs.sum() if new_probs.sum() > 0.0 else new_probs
-        pmf = DiscretePMF(new_vals, new_probs)
-        pmf.validate()
-        return pmf, under, over
