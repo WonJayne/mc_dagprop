@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Delete old build artifacts
-rm -f dist/*
-rm -f build/*
+rm -rf dist/*
+rm -rf build/*
 
 
 poetry build

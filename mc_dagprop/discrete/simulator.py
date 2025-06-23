@@ -7,7 +7,7 @@ import numpy as np
 
 from . import ProbabilityMass, Second, UnderflowRule, OverflowRule, NodeIndex, EdgeIndex
 from .context import AnalyticContext, PredecessorTuple, SimulatedEvent, validate_context
-from .. import DiscretePMF
+from .pmf import DiscretePMF
 
 
 def _build_topology(
