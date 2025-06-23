@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NewType
 
 import numpy as np
@@ -24,37 +24,31 @@ class DiscretePMF:
 
     values: np.ndarray
     probs: np.ndarray
+    step_size: Second = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if len(self.values) != len(self.probs):
             raise ValueError("values and probs must have same length")
+        if len(self.values) < 2:
+            step = 0.0
+        else:
+            diffs = np.diff(self.values)
+            step = float(diffs[0]) if np.allclose(diffs, diffs[0]) else 0.0
+        object.__setattr__(self, "step_size", Second(step))
+        self.validate()
+
+    def validate(self) -> None:
+        if len(self.values) != len(self.probs):
+            raise ValueError("values and probs must have same length")
+        if len(self.values) > 1 and not np.all(self.values[1:] >= self.values[:-1]):
+            raise ValueError("values must be sorted in non-decreasing order")
         if not np.isclose(self.probs.sum(), 1.0):
-            # FIXME: This is not something we should be doing here, as this is causing behavioral changes.
-            # We can raise an error instead
-            object.__setattr__(self, "probs", self.probs / self.probs.sum())
-
-        # FIXME Wouldn't it be better to just expect sorted values? I would instead have a validate method,
-        #  that checks if the values are sorted. and if the probs are normalized.
-        order = np.argsort(self.values)
-        object.__setattr__(self, "values", self.values[order])
-        object.__setattr__(self, "probs", self.probs[order])
-        # merge identical values
-
-        # TODO: SAme as above, this is not something we should be doing here.
-        uniq, indices = np.unique(self.values, return_inverse=True)
-        if len(uniq) != len(self.values):
-            agg = np.zeros_like(uniq, dtype=float)
-            np.add.at(agg, indices, self.probs)
-            object.__setattr__(self, "values", uniq)
-            object.__setattr__(self, "probs", agg)
+            raise ValueError("probabilities must sum to 1.0")
 
     # Step should be a static property, defined on init. Again, someting that we can validate in a separate method.
     @property
     def step(self) -> Second:
-        if len(self.values) < 2:
-            return Second(0.0)
-        diffs = np.diff(self.values)
-        return Second(float(diffs[0])) if np.allclose(diffs, diffs[0]) else Second(0.0)
+        return self.step_size
 
     @staticmethod
     def delta(v: Second) -> "DiscretePMF":
@@ -106,13 +100,18 @@ class DiscretePMF:
         if max_value >= self.values[-1]:
             return self
         if max_value <= self.values[0]:
-            return DiscretePMF(np.array([max_value], dtype=float), np.array([1.0], dtype=float))
+            pmf = DiscretePMF(np.array([max_value], dtype=float), np.array([1.0], dtype=float))
+            pmf.validate()
+            return pmf
         idx = np.searchsorted(self.values, max_value, side="right") - 1
         new_vals = self.values[: idx + 1]
         new_probs = self.probs[: idx + 1]
         overflow = self.probs[idx + 1 :].sum()
         new_probs[-1] += overflow
-        return DiscretePMF(new_vals, new_probs)
+        new_probs = new_probs / new_probs.sum()
+        pmf = DiscretePMF(new_vals, new_probs)
+        pmf.validate()
+        return pmf
 
     def truncate(self, min_value: Second, max_value: Second) -> tuple["DiscretePMF", Probability, Probability]:
         """Truncate the PMF to ``[min_value, max_value]`` and return under/overflow mass."""
@@ -124,7 +123,7 @@ class DiscretePMF:
         if new_vals.size == 0:
             new_vals = np.array([min_value], dtype=float)
             new_probs = np.array([0.0], dtype=float)
-        # Here we might need to normalize the probabilities again?
-        # FIXME: also, here we should then call assert object.validate() to ensure the PMF is valid,
-        #  but we can use -OO to skip this check in production.
-        return DiscretePMF(new_vals, new_probs), under, over
+        new_probs = new_probs / new_probs.sum() if new_probs.sum() > 0.0 else new_probs
+        pmf = DiscretePMF(new_vals, new_probs)
+        pmf.validate()
+        return pmf, under, over
