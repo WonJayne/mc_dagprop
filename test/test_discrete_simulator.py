@@ -208,5 +208,26 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(all(e.overflow >= 0.0 for e in events_res))
 
 
+def test_run_returns_simulated_event_objects() -> None:
+    events = (
+        ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
+        ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0)),
+    )
+    edge = AnalyticEdge(
+        DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1.0)
+    )
+    ctx = AnalyticContext(
+        events=events,
+        activities={(0, 1): (0, edge)},
+        precedence_list=((1, ((0, 0),)),),
+        max_delay=5.0,
+        step_size=1.0,
+    )
+
+    sim = create_discrete_simulator(ctx)
+    result = sim.run()
+    assert all(isinstance(ev, SimulatedEvent) for ev in result)
+
+
 if __name__ == "__main__":
     unittest.main()

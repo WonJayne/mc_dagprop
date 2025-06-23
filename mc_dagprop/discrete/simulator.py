@@ -185,4 +185,4 @@ class DiscreteSimulator:
         assert (
             sum(clipped.probabilities) + float(under_mass) + float(over_mass) <= 1.0
         ), "Total probability mass exceeds 1.0 after clipping"
-        return SimulatedEvent(clipped, underflow_mass, overflow_mass)
+        return SimulatedEvent(clipped, under_mass, over_mass)
