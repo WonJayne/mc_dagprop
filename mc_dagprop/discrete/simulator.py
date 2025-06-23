@@ -145,9 +145,12 @@ class DiscreteSimulator:
         new_vals = vals[keep_mask]
         new_probs = probs[keep_mask]
 
-        # FIXME These checks/conditions are hard to grasp, do instead give them a variable name,
-        #  so that it is clear what they are checking.
-        if self.underflow_rule is UnderflowRule.TRUNCATE and float(under_mass) > 0.0:
+        # Move mass below the minimum bound to the bound itself when
+        # ``TRUNCATE`` is active and there is mass to relocate.
+        should_truncate_underflow = (
+            self.underflow_rule is UnderflowRule.TRUNCATE and float(under_mass) > 0.0
+        )
+        if should_truncate_underflow:
             if new_vals.size and np.isclose(new_vals[0], min_value):
                 new_probs[0] += under_mass
             else:
@@ -155,7 +158,12 @@ class DiscreteSimulator:
                 new_probs = np.insert(new_probs, 0, float(under_mass))
             under_mass = ProbabilityMass(0.0)
 
-        if self.overflow_rule is OverflowRule.TRUNCATE and float(over_mass) > 0.0:
+        # Move mass above the maximum bound to the bound itself when
+        # ``TRUNCATE`` is active and there is mass to relocate.
+        should_truncate_overflow = (
+            self.overflow_rule is OverflowRule.TRUNCATE and float(over_mass) > 0.0
+        )
+        if should_truncate_overflow:
             if new_vals.size and np.isclose(new_vals[-1], max_value):
                 new_probs[-1] += over_mass
             else:
@@ -163,18 +171,26 @@ class DiscreteSimulator:
                 new_probs = np.append(new_probs, float(over_mass))
             over_mass = ProbabilityMass(0.0)
 
-        # FIXME: See  above, needs a variable name to clarify the condition.
+        # Probability mass removed under ``REDISTRIBUTE`` is reallocated
+        # proportionally across the remaining distribution.
         to_add = ProbabilityMass(0.0)
-        if self.underflow_rule is UnderflowRule.REDISTRIBUTE and under_mass > 0.0:
+        should_redistribute_underflow = (
+            self.underflow_rule is UnderflowRule.REDISTRIBUTE and under_mass > 0.0
+        )
+        if should_redistribute_underflow:
             to_add = under_mass
             under_mass = ProbabilityMass(0.0)
 
-        if self.overflow_rule is OverflowRule.REDISTRIBUTE and over_mass > 0.0:
+        should_redistribute_overflow = (
+            self.overflow_rule is OverflowRule.REDISTRIBUTE and over_mass > 0.0
+        )
+        if should_redistribute_overflow:
             to_add += over_mass
             over_mass = ProbabilityMass(0.0)
 
+        # Spread collected underflow/overflow mass according to the
+        # relative probabilities of the remaining distribution.
         if to_add > 0.0:
-            # re-distribute the mass according to the probabilities
             new_probs = new_probs + to_add * (new_probs / new_probs.sum())
 
         clipped = DiscretePMF(new_vals, new_probs)
