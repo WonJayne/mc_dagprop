@@ -11,6 +11,7 @@ NodeIndex = int
 EdgeIndex = int
 Pred = tuple[NodeIndex, EdgeIndex]
 
+
 @dataclass(frozen=True, slots=True)
 class AnalyticEdge:
     """Edge with an associated delay distribution.
@@ -20,6 +21,7 @@ class AnalyticEdge:
     """
 
     pmf: DiscretePMF
+
 
 @dataclass(frozen=True, slots=True)
 class ScheduledEvent:
@@ -40,6 +42,7 @@ class ScheduledEvent:
         if self.bounds is None:
             object.__setattr__(self, "bounds", (self.timestamp.earliest, self.timestamp.latest))
 
+
 @dataclass(frozen=True, slots=True)
 class SimulatedEvent:
     """Result of propagating a scheduled event.
@@ -53,6 +56,7 @@ class SimulatedEvent:
     pmf: DiscretePMF
     underflow: Probability
     overflow: Probability
+
 
 @dataclass(frozen=True, slots=True)
 class AnalyticContext:
@@ -88,3 +92,4 @@ class AnalyticContext:
         for _, edge in self.activities.values():
             if not np.isclose(edge.pmf.step, self.step_size):
                 raise ValueError(f"edge PMF step {edge.pmf.step} does not match context step size {self.step_size}")
+            edge.pmf.validate_alignment(self.step_size)
