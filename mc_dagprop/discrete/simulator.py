@@ -4,7 +4,7 @@ from collections import deque
 from dataclasses import dataclass, field
 
 from .context import AnalyticContext, Pred
-from .pmf import DiscretePMF
+from .pmf import DiscretePMF, Probability
 
 @dataclass(frozen=True, slots=True)
 class DiscreteSimulator:
@@ -13,8 +13,8 @@ class DiscreteSimulator:
     context: AnalyticContext
     _preds_by_target: list[tuple[Pred, ...] | None] = field(init=False, repr=False)
     order: list[int] = field(init=False, repr=False)
-    underflow: list[float] = field(init=False, repr=False)
-    overflow: list[float] = field(init=False, repr=False)
+    underflow: list[Probability] = field(init=False, repr=False)
+    overflow: list[Probability] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.context.validate()
@@ -52,8 +52,8 @@ class DiscreteSimulator:
 
         n_events = len(self.context.events)
         event_pmfs: list[DiscretePMF] = [None] * n_events  # type: ignore
-        under: list[float] = [0.0] * n_events
-        over: list[float] = [0.0] * n_events
+        under: list[Probability] = [0.0] * n_events
+        over: list[Probability] = [0.0] * n_events
         for idx in self.order:
             ev = self.context.events[idx]
             base = DiscretePMF.delta(ev.timestamp.earliest)

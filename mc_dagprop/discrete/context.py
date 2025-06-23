@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from mc_dagprop import EventTimestamp
-from .pmf import DiscretePMF
+from .pmf import DiscretePMF, Probability, Second
 
 # TODO:
 #  General comments: Please avoid using list as return type annotations, as they are mutable and can lead to unexpected
@@ -28,14 +28,14 @@ class AnalyticEdge:
 class ScheduledEvent:
     id: str
     timestamp: EventTimestamp
-    bounds: tuple[float, float] | None = None
+    bounds: tuple[Second, Second] | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class SimulatedEvent:
     pmf: DiscretePMF
-    underflow: float
-    overflow: float
+    underflow: Probability
+    overflow: Probability
 
 
 # TODO: we should have a scheduled event and a simulated event, where the scheduled event has a timestamp and bounds,
@@ -47,8 +47,8 @@ class AnalyticContext:
     events: tuple[ScheduledEvent, ...]
     activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
     precedence_list: tuple[tuple[NodeIndex, tuple[Pred, ...]], ...]
-    max_delay: float = 0.0
-    step_size: float = 0.0
+    max_delay: Second = 0.0
+    step_size: Second = 0.0
 
     def __post_init__(self) -> None:
         # Accept sequences in the constructor but store tuples internally to
