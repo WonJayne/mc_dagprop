@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import NewType
 
 import numpy as np
 
 # Some comments on the code, things to improve or change:
-# TODO: Define a custum type, Second, that is a float, but has a unit of seconds, which we can use in the future.
-# TODO: Define a custom type, Probability, that is a float, but has a unit of probability, which we can use in the future.
+
+# Define a custom type for values expressed in seconds.  ``NewType`` keeps the
+# runtime representation as ``float`` but allows mypy or other type checkers to
+# distinguish it from plain floats.
+Second = NewType("Second", float)
+
+# Likewise for probability values.
+Probability = NewType("Probability", float)
 
 # Please use from __future__ import annotations to ensure that the type hints are better readable
 
@@ -43,17 +50,17 @@ class DiscretePMF:
 
     # Step should be a static property, defined on init. Again, someting that we can validate in a separate method.
     @property
-    def step(self) -> float:
+    def step(self) -> Second:
         if len(self.values) < 2:
-            return 0.0
+            return Second(0.0)
         diffs = np.diff(self.values)
-        return float(diffs[0]) if np.allclose(diffs, diffs[0]) else 0.0
+        return Second(float(diffs[0])) if np.allclose(diffs, diffs[0]) else Second(0.0)
 
     @staticmethod
-    def delta(v: float) -> "DiscretePMF":
+    def delta(v: Second) -> "DiscretePMF":
         return DiscretePMF(np.array([v], dtype=float), np.array([1.0], dtype=float))
 
-    def shift(self, delta: float) -> "DiscretePMF":
+    def shift(self, delta: Second) -> "DiscretePMF":
         return DiscretePMF(self.values + delta, self.probs.copy())
 
     def convolve(self, other: "DiscretePMF") -> "DiscretePMF":
@@ -95,7 +102,7 @@ class DiscretePMF:
         cdf_min = 1.0 - (1.0 - cdf1) * (1.0 - cdf2)
         return DiscretePMF(all_vals, np.diff(np.concatenate([[0.0], cdf_min])))
 
-    def truncate_right(self, max_value: float) -> "DiscretePMF":
+    def truncate_right(self, max_value: Second) -> "DiscretePMF":
         if max_value >= self.values[-1]:
             return self
         if max_value <= self.values[0]:
@@ -107,10 +114,10 @@ class DiscretePMF:
         new_probs[-1] += overflow
         return DiscretePMF(new_vals, new_probs)
 
-    def truncate(self, min_value: float, max_value: float) -> tuple["DiscretePMF", float, float]:
+    def truncate(self, min_value: Second, max_value: Second) -> tuple["DiscretePMF", Probability, Probability]:
         """Truncate the PMF to ``[min_value, max_value]`` and return under/overflow mass."""
-        under = float(self.probs[self.values < min_value].sum())
-        over = float(self.probs[self.values > max_value].sum())
+        under = Probability(self.probs[self.values < min_value].sum())
+        over = Probability(self.probs[self.values > max_value].sum())
         mask = (self.values >= min_value) & (self.values <= max_value)
         new_vals = self.values[mask]
         new_probs = self.probs[mask]
