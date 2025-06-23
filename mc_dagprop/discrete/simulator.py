@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 
-from .context import AnalyticContext, Pred
+from .context import AnalyticContext, Pred, SimulatedEvent
 from .pmf import DiscretePMF, Probability
 
 @dataclass(frozen=True, slots=True)
@@ -13,13 +13,9 @@ class DiscreteSimulator:
     context: AnalyticContext
     _preds_by_target: list[tuple[Pred, ...] | None] = field(init=False, repr=False)
     order: list[int] = field(init=False, repr=False)
-    underflow: list[Probability] = field(init=False, repr=False)
-    overflow: list[Probability] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.context.validate()
-        object.__setattr__(self, "underflow", [])
-        object.__setattr__(self, "overflow", [])
         self._build_topology()
 
     def _build_topology(self) -> None:
@@ -47,13 +43,9 @@ class DiscreteSimulator:
         object.__setattr__(self, "_preds_by_target", preds_by_target)
         object.__setattr__(self, "order", order)
 
-    def run(self) -> tuple[DiscretePMF, ...]:
-        # FIXME: here, I would expect to get a tuple of simulated Events, each with a PMF.
-
+    def run(self) -> tuple[SimulatedEvent, ...]:
         n_events = len(self.context.events)
-        event_pmfs: list[DiscretePMF] = [None] * n_events  # type: ignore
-        under: list[Probability] = [0.0] * n_events
-        over: list[Probability] = [0.0] * n_events
+        events: list[SimulatedEvent] = [None] * n_events  # type: ignore
         for idx in self.order:
             ev = self.context.events[idx]
             base = DiscretePMF.delta(ev.timestamp.earliest)
@@ -64,20 +56,10 @@ class DiscreteSimulator:
                 cur = None
                 for src, link in preds:
                     edge_pmf = self.context.activities[(src, idx)][1].pmf
-                    candidate = event_pmfs[src].convolve(edge_pmf)
+                    candidate = events[src].pmf.convolve(edge_pmf)
                     cur = candidate if cur is None else cur.maximum(candidate)
                 pmf = cur if cur is not None else base
-            lb, ub = (
-                ev.bounds
-                if ev.bounds is not None
-                else (ev.timestamp.earliest, ev.timestamp.latest)
-            )
+            lb, ub = ev.bounds
             pmf, u, o = pmf.truncate(lb, ub)
-            under[idx] = u
-            over[idx] = o
-            event_pmfs[idx] = pmf
-        # FIXME: Over and underflow should be given to the individual events, as this allows the user to
-        #  investigate the propagation of the PMF in more detail.
-        object.__setattr__(self, "underflow", under)
-        object.__setattr__(self, "overflow", over)
-        return event_pmfs
+            events[idx] = SimulatedEvent(pmf, u, o)
+        return tuple(events)

@@ -53,8 +53,8 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_compare_to_monte_carlo(self) -> None:
         ds = DiscreteSimulator(self.a_context)
-        pmfs = ds.run()
-        final = pmfs[2]
+        events = ds.run()
+        final = events[2].pmf
         samples = [self.mc_sim.run(seed=i).realized[2] for i in range(2000)]
         counts = np.bincount(np.array(samples, dtype=int))[1:4]
         mc_probs = counts / counts.sum()
@@ -92,13 +92,13 @@ class TestDiscreteSimulator(unittest.TestCase):
             step_size=1.0,
         )
         ds = DiscreteSimulator(ctx)
-        pmfs = ds.run()
-        self.assertAlmostEqual(ds.overflow[1], 0.5, places=6)
-        self.assertAlmostEqual(ds.overflow[2], 0.5, places=6)
-        self.assertAlmostEqual(sum(ds.overflow), 1.0, places=6)
-        self.assertTrue(np.all(pmfs[1].values <= 1.5))
-        self.assertTrue(np.all(pmfs[2].values <= 1.8))
-        self.assertAlmostEqual(pmfs[2].probs.sum(), 1.0, places=6)
+        events_res = ds.run()
+        self.assertAlmostEqual(events_res[1].overflow, 0.5, places=6)
+        self.assertAlmostEqual(events_res[2].overflow, 0.5, places=6)
+        self.assertAlmostEqual(sum(e.overflow for e in events_res), 1.0, places=6)
+        self.assertTrue(np.all(events_res[1].pmf.values <= 1.5))
+        self.assertTrue(np.all(events_res[2].pmf.values <= 1.8))
+        self.assertAlmostEqual(events_res[2].pmf.probs.sum(), 1.0, places=6)
 
     def test_large_uniform_network(self) -> None:
         values = np.arange(-180.0, 1800.1, 1.0)
@@ -117,12 +117,12 @@ class TestDiscreteSimulator(unittest.TestCase):
             events=events, activities=activities, precedence_list=precedence, max_delay=1800.0, step_size=1.0
         )
         ds = DiscreteSimulator(ctx)
-        pmfs = ds.run()
-        self.assertEqual(len(pmfs), 5)
-        for pmf in pmfs[1:]:
-            self.assertAlmostEqual(pmf.step, 1.0, places=6)
-        self.assertTrue(all(u >= 0.0 for u in ds.underflow))
-        self.assertTrue(all(o >= 0.0 for o in ds.overflow))
+        events_res = ds.run()
+        self.assertEqual(len(events_res), 5)
+        for e in events_res[1:]:
+            self.assertAlmostEqual(e.pmf.step, 1.0, places=6)
+        self.assertTrue(all(e.underflow >= 0.0 for e in events_res))
+        self.assertTrue(all(e.overflow >= 0.0 for e in events_res))
 
 
 if __name__ == "__main__":

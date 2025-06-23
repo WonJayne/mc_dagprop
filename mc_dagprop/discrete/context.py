@@ -28,7 +28,12 @@ class AnalyticEdge:
 class ScheduledEvent:
     id: str
     timestamp: EventTimestamp
+
     bounds: tuple[Second, Second] | None = None
+
+    def __post_init__(self) -> None:
+        if self.bounds is None:
+            object.__setattr__(self, "bounds", (self.timestamp.earliest, self.timestamp.latest))
 
 
 @dataclass(frozen=True, slots=True)
