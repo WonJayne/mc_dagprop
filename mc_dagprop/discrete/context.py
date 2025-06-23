@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 
-from mc_dagprop import SimEvent
+from mc_dagprop import EventTimestamp, SimEvent
 
 from .pmf import DiscretePMF
 
@@ -20,14 +20,24 @@ class AnalyticEdge:
 
 
 @dataclass
+class AnalyticEvent:
+    id: str
+    timestamp: EventTimestamp
+    bounds: Tuple[float, float] | None = None
+
+
+@dataclass
 class AnalyticContext:
-    events: List[SimEvent]
+    events: List[AnalyticEvent]
     activities: Dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
     precedence_list: List[tuple[NodeIndex, List[Pred]]]
     max_delay: float = 0.0
     step_size: float = 0.0
 
     def validate(self) -> None:
+        for ev in self.events:
+            if ev.bounds is None:
+                ev.bounds = (ev.timestamp.earliest, ev.timestamp.latest)
         for _, edge in self.activities.values():
             if not np.isclose(edge.pmf.step, self.step_size):
                 raise ValueError(

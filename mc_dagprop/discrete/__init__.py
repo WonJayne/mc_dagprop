@@ -1,5 +1,5 @@
 from .pmf import DiscretePMF
-from .context import AnalyticContext
+from .context import AnalyticContext, AnalyticEvent
 from .simulator import DiscreteSimulator
 
-__all__ = ["DiscretePMF", "AnalyticContext", "DiscreteSimulator"]
+__all__ = ["DiscretePMF", "AnalyticEvent", "AnalyticContext", "DiscreteSimulator"]
