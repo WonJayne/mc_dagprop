@@ -103,7 +103,11 @@ class OverflowRule(IntEnum):
 
 
 def validate_context(context: AnalyticContext) -> None:
-    """Validate that ``context`` is structurally correct."""
+    """Validate that ``context`` is structurally correct.
+
+    Checks scheduled event bounds, validates activity indices and common step
+    size, and ensures the precedence list is free of cycles.
+    """
 
     n_events = len(context.events)
 
