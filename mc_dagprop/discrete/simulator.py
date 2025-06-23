@@ -67,7 +67,11 @@ class DiscreteSimulator:
                     candidate = event_pmfs[src].convolve(edge_pmf)
                     cur = candidate if cur is None else cur.maximum(candidate)
                 pmf = cur if cur is not None else base
-            lb, ub = ev.bounds
+            lb, ub = (
+                ev.bounds
+                if ev.bounds is not None
+                else (ev.timestamp.earliest, ev.timestamp.latest)
+            )
             pmf, u, o = pmf.truncate(lb, ub)
             under[idx] = u
             over[idx] = o

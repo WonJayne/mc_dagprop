@@ -194,7 +194,7 @@ This computes event-time PMFs deterministically without Monte-Carlo sampling.
 The ``step_size`` sets the spacing for all values in the discrete PMFs.
 ``DiscreteSimulator`` invokes ``AnalyticContext.validate()`` at construction
 time and will raise an error when any edge uses a different step.
-Each ``AnalyticEvent`` may specify ``bounds=(lower, upper)`` to clip the
+Each ``ScheduledEvent`` may specify ``bounds=(lower, upper)`` to clip the
 resulting distribution. Mass cut off below or above those limits is recorded in
 the simulator's ``underflow`` and ``overflow`` lists after ``run()``.
 By default the step size is ``1.0`` second and typical delay deviations range

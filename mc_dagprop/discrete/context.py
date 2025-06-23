@@ -25,14 +25,17 @@ class AnalyticEdge:
 
 
 @dataclass(frozen=True, slots=True)
-class AnalyticEvent:
+class ScheduledEvent:
     id: str
     timestamp: EventTimestamp
     bounds: tuple[float, float] | None = None
 
-    def __post_init__(self) -> None:
-        if self.bounds is None:
-            object.__setattr__(self, "bounds", (self.timestamp.earliest, self.timestamp.latest))
+
+@dataclass(frozen=True, slots=True)
+class SimulatedEvent:
+    pmf: DiscretePMF
+    underflow: float
+    overflow: float
 
 
 # TODO: we should have a scheduled event and a simulated event, where the scheduled event has a timestamp and bounds,
@@ -41,7 +44,7 @@ class AnalyticEvent:
 
 @dataclass(frozen=True, slots=True)
 class AnalyticContext:
-    events: tuple[AnalyticEvent, ...]
+    events: tuple[ScheduledEvent, ...]
     activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
     precedence_list: tuple[tuple[NodeIndex, tuple[Pred, ...]], ...]
     max_delay: float = 0.0
