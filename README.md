@@ -168,7 +168,13 @@ You can propagate discrete delay distributions analytically using `DiscreteSimul
 Define per-edge probability mass functions and build an `AnalyticContext`:
 
 ```python
-from mc_dagprop import AnalyticContext, DiscretePMF, DiscreteSimulator, EventTimestamp, SimEvent
+from mc_dagprop import (
+    AnalyticContext,
+    DiscretePMF,
+    EventTimestamp,
+    SimEvent,
+    create_discrete_simulator,
+)
 
 events = (
     SimEvent("A", EventTimestamp(0, 10, 0)),
@@ -185,7 +191,7 @@ ctx = AnalyticContext(
     step_size=1.0,
 )
 
-sim = DiscreteSimulator(ctx)
+sim = create_discrete_simulator(ctx)
 pmfs = sim.run()
 print(pmfs[1].values, pmfs[1].probs)
 ```

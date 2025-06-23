@@ -1,17 +1,21 @@
 import unittest
+import os
+import sys
 
 import numpy as np
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from mc_dagprop import (
     AnalyticContext,
     ScheduledEvent,
     DiscretePMF,
-    DiscreteSimulator,
     EventTimestamp,
     GenericDelayGenerator,
     SimActivity,
     SimContext,
     SimEvent,
     Simulator,
+    create_discrete_simulator,
 )
 from mc_dagprop.discrete.context import AnalyticEdge
 
@@ -52,7 +56,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.mc_sim = Simulator(self.mc_context, gen)
 
     def test_compare_to_monte_carlo(self) -> None:
-        ds = DiscreteSimulator(self.a_context)
+        ds = create_discrete_simulator(self.a_context)
         events = ds.run()
         final = events[2].pmf
         samples = [self.mc_sim.run(seed=i).realized[2] for i in range(2000)]
@@ -73,7 +77,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             step_size=2.0,
         )
         with self.assertRaises(ValueError):
-            DiscreteSimulator(ctx)
+            create_discrete_simulator(ctx)
 
     def test_bounds_and_overflow(self) -> None:
         events = (
@@ -91,7 +95,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             max_delay=5.0,
             step_size=1.0,
         )
-        ds = DiscreteSimulator(ctx)
+        ds = create_discrete_simulator(ctx)
         events_res = ds.run()
         self.assertAlmostEqual(events_res[1].overflow, 0.5, places=6)
         self.assertAlmostEqual(events_res[2].overflow, 0.5, places=6)
@@ -116,7 +120,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         ctx = AnalyticContext(
             events=events, activities=activities, precedence_list=precedence, max_delay=1800.0, step_size=1.0
         )
-        ds = DiscreteSimulator(ctx)
+        ds = create_discrete_simulator(ctx)
         events_res = ds.run()
         self.assertEqual(len(events_res), 5)
         for e in events_res[1:]:
