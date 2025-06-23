@@ -207,6 +207,39 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(all(e.underflow >= 0.0 for e in events_res))
         self.assertTrue(all(e.overflow >= 0.0 for e in events_res))
 
+    def test_invalid_event_bounds(self) -> None:
+        events = (
+            ScheduledEvent("0", EventTimestamp(5.0, 4.0, 0.0)),
+        )
+        ctx = AnalyticContext(
+            events=events,
+            activities={},
+            precedence_list=(),
+            max_delay=5.0,
+            step_size=1.0,
+        )
+        with self.assertRaises(ValueError):
+            create_discrete_simulator(ctx)
+
+    def test_cycle_detection(self) -> None:
+        events = (
+            ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
+            ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0)),
+        )
+        edge = AnalyticEdge(DiscretePMF(np.array([1.0]), np.array([1.0]), step=1.0))
+        ctx = AnalyticContext(
+            events=events,
+            activities={
+                (0, 1): (0, edge),
+                (1, 0): (1, edge),
+            },
+            precedence_list=((1, ((0, 0),)), (0, ((1, 1),))),
+            max_delay=5.0,
+            step_size=1.0,
+        )
+        with self.assertRaises(ValueError):
+            create_discrete_simulator(ctx)
+
 
 def test_run_returns_simulated_event_objects() -> None:
     events = (

@@ -103,24 +103,61 @@ class OverflowRule(IntEnum):
 
 
 def validate_context(context: AnalyticContext) -> None:
-    """Validate the AnalyticContext for correctness.
+    """Validate that ``context`` is structurally correct."""
 
-    This function checks that the context is well-formed, including:
-    - All events have valid bounds.
-    - All events have a valid timestamp.
-    - All activities have valid PMFs.
-    - Predecessors are correctly defined.
-    - The precedence list does not contain cycles.
-    """
+    n_events = len(context.events)
 
-    # TODO: Implement validation for events and their bounds.
-    # TODO: Implement validation for the precedence list to ensure no cycles exist.
-    # TODO: Implement validation for the activities to ensure all PMFs are well-defined.
+    # Validate scheduled events
+    for i, ev in enumerate(context.events):
+        ts = ev.timestamp
+        if ts.earliest > ts.latest:
+            raise ValueError(f"event {i} has earliest > latest")
+        if not (ts.earliest <= ts.actual <= ts.latest):
+            raise ValueError(f"event {i} actual time outside bounds")
 
-    if len(context.activities) > 0:
-        first_edge = next(iter(context.activities.values()))[1]
-        base_step = first_edge.pmf.step
-        for _, edge in context.activities.values():
-            if not np.isclose(base_step, edge.pmf.step):
-                raise ValueError(f"edge PMF step {edge.pmf.step} does not match context step size {base_step}")
-            edge.pmf.validate_alignment(base_step)
+    # Validate activities and PMFs
+    for (src, dst), (edge_idx, edge) in context.activities.items():
+        if not (0 <= src < n_events and 0 <= dst < n_events):
+            raise ValueError(f"activity {(src, dst)} references invalid node")
+        edge.pmf.validate()
+        if not np.isclose(edge.pmf.step, context.step_size):
+            raise ValueError(
+                f"edge {(src, dst)} step {edge.pmf.step} does not match context step size {context.step_size}"
+            )
+        edge.pmf.validate_alignment(context.step_size)
+
+    # Validate precedence list and build topology for cycle check
+    from collections import deque
+
+    adjacency: list[list[int]] = [[] for _ in range(n_events)]
+    indegree = [0] * n_events
+
+    for target, preds in context.precedence_list:
+        if not (0 <= target < n_events):
+            raise ValueError(f"target index {target} out of range")
+        for src, link in preds:
+            if not (0 <= src < n_events):
+                raise ValueError(f"predecessor index {src} out of range")
+            edge = context.activities.get((src, target))
+            if edge is None:
+                raise ValueError(f"missing activity for {(src, target)}")
+            if edge[0] != link:
+                raise ValueError(
+                    f"edge index {link} for {(src, target)} does not match context mapping {edge[0]}"
+                )
+            adjacency[src].append(target)
+            indegree[target] += 1
+
+    # Topological check for cycles
+    q: deque[int] = deque(i for i, deg in enumerate(indegree) if deg == 0)
+    visited = 0
+    while q:
+        node = q.popleft()
+        visited += 1
+        for dst in adjacency[node]:
+            indegree[dst] -= 1
+            if indegree[dst] == 0:
+                q.append(dst)
+
+    if visited != n_events:
+        raise ValueError("precedence list contains a cycle")
