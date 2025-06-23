@@ -15,8 +15,10 @@ from .discrete import (
     DiscretePMF,
     DiscreteSimulator,
     create_discrete_simulator,
+    UnderflowRule,
+    OverflowRule,
 )
-from . import UnderflowRule, OverflowRule
+
 from .utils.inspection import plot_activity_delays, retrieve_absolute_and_relative_delays
 
 __version__ = version("mc-dagprop")
