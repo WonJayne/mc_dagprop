@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from mc_dagprop import (
     AnalyticContext,
-    AnalyticEvent,
+    ScheduledEvent,
     DiscretePMF,
     DiscreteSimulator,
     EventTimestamp,
@@ -19,9 +19,9 @@ from mc_dagprop.discrete.context import AnalyticEdge
 class TestDiscreteSimulator(unittest.TestCase):
     def setUp(self) -> None:
         self.events = (
-            AnalyticEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
-            AnalyticEvent("1", EventTimestamp(0.0, 100.0, 0.0)),
-            AnalyticEvent("2", EventTimestamp(0.0, 100.0, 0.0)),
+            ScheduledEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
+            ScheduledEvent("1", EventTimestamp(0.0, 100.0, 0.0)),
+            ScheduledEvent("2", EventTimestamp(0.0, 100.0, 0.0)),
         )
         self.mc_events = (
             SimEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
@@ -77,9 +77,9 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_bounds_and_overflow(self) -> None:
         events = (
-            AnalyticEvent("0", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 0.0)),
-            AnalyticEvent("1", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.5)),
-            AnalyticEvent("2", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.8)),
+            ScheduledEvent("0", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 0.0)),
+            ScheduledEvent("1", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.5)),
+            ScheduledEvent("2", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.8)),
         )
         ctx = AnalyticContext(
             events=events,
@@ -103,7 +103,7 @@ class TestDiscreteSimulator(unittest.TestCase):
     def test_large_uniform_network(self) -> None:
         values = np.arange(-180.0, 1800.1, 1.0)
         probs = np.ones_like(values, dtype=float) / len(values)
-        events = tuple(AnalyticEvent(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(5))
+        events = tuple(ScheduledEvent(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(5))
         precedence = ((1, ((0, 0),)), (2, ((0, 1),)), (3, ((1, 2), (2, 3))), (4, ((2, 4), (3, 5))))
         activities = {
             (0, 1): (0, AnalyticEdge(DiscretePMF(values, probs))),
