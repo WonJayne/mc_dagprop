@@ -31,6 +31,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             activities={(0, 1): (0, act0), (1, 2): (1, act1)},
             precedence_list=self.precedence,
             max_delay=5.0,
+            step_size=1.0,
         )
 
         self.mc_context = SimContext(
@@ -54,6 +55,19 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(np.allclose(final.values, [1.0, 2.0, 3.0]))
         self.assertTrue(np.allclose(final.probs, [0.25, 0.5, 0.25], atol=0.05))
         self.assertTrue(np.allclose(mc_probs, final.probs, atol=0.05))
+
+    def test_mismatched_step_size(self) -> None:
+        act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5])))
+        act1 = AnalyticEdge(DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5])))
+        ctx = AnalyticContext(
+            events=self.events,
+            activities={(0, 1): (0, act0), (1, 2): (1, act1)},
+            precedence_list=self.precedence,
+            max_delay=5.0,
+            step_size=2.0,
+        )
+        with self.assertRaises(ValueError):
+            DiscreteSimulator(ctx)
 
 
 if __name__ == "__main__":

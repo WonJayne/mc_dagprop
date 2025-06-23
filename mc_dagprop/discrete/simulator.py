@@ -12,6 +12,7 @@ class DiscreteSimulator:
 
     def __init__(self, context: AnalyticContext):
         self.context = context
+        self.context.validate()
         self._build_topology()
 
     def _build_topology(self) -> None:
