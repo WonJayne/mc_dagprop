@@ -74,6 +74,33 @@ The objective is to produce **maintainable**, **coherent**, and **professional**
 
 ---
 
+### 8. Build and Test Pipeline
+
+* **Prerequisites**
+  * Python 3.12 or later
+  * `poetry` installed (for dependency management)
+  * A compiler supported by `pybind11` (for the C++ core)
+
+* **Standard pipeline**
+  * On Linux/macOS:
+
+    ```bash
+    bash pipeline.sh
+    ```
+    This script deletes old build artifacts, builds the wheel with `poetry build`, reinstalls the resulting wheel, and runs the unit tests in `test/`.
+
+  * On Windows:
+
+    ```cmd
+    pipeline.bat
+    ```
+    The batch script performs the same steps as `pipeline.sh` and runs `mc_dagprop\utils\demonstration.py`.
+
+* **Development utilities**
+  `devtools.cmd` provides a convenient wrapper for code formatting, linting, and testing. Run `devtools.cmd --all` (or `-a`) to reformat, check, score, and test the code in one step.
+
+---
+
 **Maintainability, clarity, and professionalism are required. No exceptions.**
 
 ---
