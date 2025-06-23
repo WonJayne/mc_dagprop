@@ -98,6 +98,42 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(np.all(pmfs[2].values <= 1.8))
         self.assertAlmostEqual(pmfs[2].probs.sum(), 1.0, places=6)
 
+    def test_large_uniform_network(self) -> None:
+        values = np.arange(-180.0, 1800.1, 1.0)
+        probs = np.ones_like(values, dtype=float) / len(values)
+        events = [
+            AnalyticEvent(str(i), EventTimestamp(0.0, 2000.0, 0.0))
+            for i in range(5)
+        ]
+        precedence = [
+            (1, [(0, 0)]),
+            (2, [(0, 1)]),
+            (3, [(1, 2), (2, 3)]),
+            (4, [(2, 4), (3, 5)]),
+        ]
+        activities = {
+            (0, 1): (0, AnalyticEdge(DiscretePMF(values, probs))),
+            (0, 2): (1, AnalyticEdge(DiscretePMF(values, probs))),
+            (1, 3): (2, AnalyticEdge(DiscretePMF(values, probs))),
+            (2, 3): (3, AnalyticEdge(DiscretePMF(values, probs))),
+            (2, 4): (4, AnalyticEdge(DiscretePMF(values, probs))),
+            (3, 4): (5, AnalyticEdge(DiscretePMF(values, probs))),
+        }
+        ctx = AnalyticContext(
+            events=events,
+            activities=activities,
+            precedence_list=precedence,
+            max_delay=1800.0,
+            step_size=1.0,
+        )
+        ds = DiscreteSimulator(ctx)
+        pmfs = ds.run()
+        self.assertEqual(len(pmfs), 5)
+        for pmf in pmfs:
+            self.assertAlmostEqual(pmf.step, 1.0, places=6)
+        self.assertTrue(all(u == 0.0 for u in ds.underflow))
+        self.assertTrue(all(o == 0.0 for o in ds.overflow))
+
 
 if __name__ == "__main__":
     unittest.main()

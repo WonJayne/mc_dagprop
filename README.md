@@ -173,13 +173,27 @@ from mc_dagprop import AnalyticContext, DiscretePMF, DiscreteSimulator, EventTim
 events = [SimEvent("A", EventTimestamp(0, 10, 0)), SimEvent("B", EventTimestamp(0, 10, 0))]
 activities = {(0, 1): (0, DiscretePMF([1.0, 2.0], [0.5, 0.5]))}
 precedence = [(1, [(0, 0)])]
-ctx = AnalyticContext(events=events, activities=activities, precedence_list=precedence)
+ctx = AnalyticContext(
+    events=events,
+    activities=activities,
+    precedence_list=precedence,
+    step_size=1.0,
+)
 
 sim = DiscreteSimulator(ctx)
 pmfs = sim.run()
 print(pmfs[1].values, pmfs[1].probs)
 ```
 This computes event-time PMFs deterministically without Monte-Carlo sampling.
+
+The ``step_size`` sets the spacing for all values in the discrete PMFs.
+``DiscreteSimulator`` invokes ``AnalyticContext.validate()`` at construction
+time and will raise an error when any edge uses a different step.
+Each ``AnalyticEvent`` may specify ``bounds=(lower, upper)`` to clip the
+resulting distribution. Mass cut off below or above those limits is recorded in
+the simulator's ``underflow`` and ``overflow`` lists after ``run()``.
+By default the step size is ``1.0`` second and typical delay deviations range
+roughly from ``-180`` s up to ``+1800`` s.
 
 
 ---
