@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import unique, IntEnum
 
 import numpy as np
 
 from mc_dagprop import EventTimestamp
-from .pmf import DiscretePMF, Probability, Second
+from . import Second, ProbabilityMass, NodeIndex, EdgeIndex
+from .pmf import DiscretePMF
 
-NodeIndex = int
-EdgeIndex = int
-Pred = tuple[NodeIndex, EdgeIndex]
+PredecessorTuple = tuple[NodeIndex, EdgeIndex]
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +20,7 @@ class AnalyticEdge:
         pmf: Probability mass function describing the delay on this edge.
     """
 
+    idx: EdgeIndex
     pmf: DiscretePMF
 
 
@@ -30,17 +31,15 @@ class ScheduledEvent:
     Attributes:
         id: Unique identifier of the event.
         timestamp: Earliest, latest and nominal time bounds.
-        bounds: Optional lower and upper bounds used for simulation.
     """
 
     id: str
     timestamp: EventTimestamp
 
-    bounds: tuple[Second, Second] | None = None
-
-    def __post_init__(self) -> None:
-        if self.bounds is None:
-            object.__setattr__(self, "bounds", (self.timestamp.earliest, self.timestamp.latest))
+    @property
+    def bounds(self) -> tuple[Second, Second]:
+        """Return the lower and upper bounds of the event."""
+        return self.timestamp.earliest, self.timestamp.latest
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,8 +53,8 @@ class SimulatedEvent:
     """
 
     pmf: DiscretePMF
-    underflow: Probability
-    overflow: Probability
+    underflow: ProbabilityMass
+    overflow: ProbabilityMass
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,30 +65,58 @@ class AnalyticContext:
         events: Immutable sequence of scheduled events.
         activities: Mapping from (source, target) node pairs to analytic edges.
         precedence_list: List of ``(target, predecessors)`` tuples.
-        max_delay: Global cap on allowed propagation delay.
         step_size: Discrete time step shared by all distributions.
     """
 
     events: tuple[ScheduledEvent, ...]
     activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
-    precedence_list: tuple[tuple[NodeIndex, tuple[Pred, ...]], ...]
-    max_delay: Second = 0.0
-    step_size: Second = 0.0
+    precedence_list: tuple[tuple[NodeIndex, tuple[PredecessorTuple, ...]], ...]
+    step_size: Second
+    underflow_rule: UnderflowRule
+    overflow_rule: OverflowRule
 
-    def __post_init__(self) -> None:
-        # Accept sequences in the constructor but store tuples internally to
-        # avoid accidental mutation of the context after creation.
-        if not isinstance(self.events, tuple):
-            object.__setattr__(self, "events", tuple(self.events))
-        if not isinstance(self.precedence_list, tuple):
-            fixed = []
-            for target, preds in self.precedence_list:  # type: ignore[attr-defined]
-                preds_tuple = tuple(preds)
-                fixed.append((target, preds_tuple))
-            object.__setattr__(self, "precedence_list", tuple(fixed))
 
-    def validate(self) -> None:
-        for _, edge in self.activities.values():
-            if not np.isclose(edge.pmf.step, self.step_size):
-                raise ValueError(f"edge PMF step {edge.pmf.step} does not match context step size {self.step_size}")
-            edge.pmf.validate_alignment(self.step_size)
+@unique
+class UnderflowRule(IntEnum):
+    """How to handle probability mass below a lower bound."""
+
+    # TODO: Explain meaning of each rule better
+
+    TRUNCATE = 1
+    REMOVE = 2
+    REDISTRIBUTE = 3
+
+
+@unique
+class OverflowRule(IntEnum):
+    """How to handle probability mass above an upper bound."""
+
+    # TODO: Explain meaning of each rule better
+
+    TRUNCATE = 1
+    REMOVE = 2
+    REDISTRIBUTE = 3
+
+
+def validate_context(context: AnalyticContext) -> None:
+    """Validate the AnalyticContext for correctness.
+
+    This function checks that the context is well-formed, including:
+    - All events have valid bounds.
+    - All events have a valid timestamp.
+    - All activities have valid PMFs.
+    - Predecessors are correctly defined.
+    - The precedence list does not contain cycles.
+    """
+
+    # TODO: Implement validation for events and their bounds.
+    # TODO: Implement validation for the precedence list to ensure no cycles exist.
+    # TODO: Implement validation for the activities to ensure all PMFs are well-defined.
+
+    if len(context.activities) > 0:
+        first_edge = next(iter(context.activities.values()))[1]
+        base_step = first_edge.pmf.step
+        for _, edge in context.activities.values():
+            if not np.isclose(base_step, edge.pmf.step):
+                raise ValueError(f"edge PMF step {edge.pmf.step} does not match context step size {base_step}")
+            edge.pmf.validate_alignment(base_step)

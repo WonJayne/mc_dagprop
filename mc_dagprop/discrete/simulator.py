@@ -2,27 +2,23 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import cast
 
-from .context import AnalyticContext, Pred, SimulatedEvent
-from .pmf import (
-    DiscretePMF,
-    Probability,
-    UnderflowRule,
-    OverflowRule,
-    apply_bounds,
-)
+import numpy as np
+
+from . import ProbabilityMass, Second, UnderflowRule, OverflowRule, NodeIndex, EdgeIndex
+from .context import AnalyticContext, PredecessorTuple, SimulatedEvent, validate_context
+from .. import DiscretePMF
 
 
-def build_topology(
+def _build_topology(
     context: AnalyticContext,
-) -> tuple[list[tuple[Pred, ...] | None], list[int]]:
+) -> tuple[tuple[tuple[tuple[NodeIndex, EdgeIndex], ...] | None, ...], tuple[NodeIndex, ...]]:
     """Return predecessor mapping and topological order for ``context``."""
 
     event_count = len(context.events)
     adjacency: list[list[int]] = [[] for _ in range(event_count)]
     indegree = [0] * event_count
-    preds_by_target: list[tuple[Pred, ...] | None] = [None] * event_count
+    preds_by_target: list[tuple[PredecessorTuple, ...] | None] = [None] * event_count
 
     for target, preds in context.precedence_list:
         preds_by_target[target] = preds
@@ -44,23 +40,16 @@ def build_topology(
     if len(order) != event_count:
         raise RuntimeError("Invalid DAG: cycle detected")
 
-    return preds_by_target, order
+    return tuple(preds_by_target), tuple(order)
 
 
-def create_discrete_simulator(
-    context: AnalyticContext,
-    *,
-    underflow_rule: UnderflowRule = UnderflowRule.TRUNCATE,
-    overflow_rule: OverflowRule = OverflowRule.TRUNCATE,
-    validate: bool = True,
-) -> "DiscreteSimulator":
+def create_discrete_simulator(context: AnalyticContext, validate: bool = True) -> "DiscreteSimulator":
     """Return a :class:`DiscreteSimulator` with topology built for ``context``.
 
     Parameters
     ----------
     context:
         Analytic description of the DAG to simulate.
-    underflow_rule, overflow_rule:
         How to handle probability mass outside event bounds.
     validate:
         When ``True`` (default), ``context.validate()`` is invoked before
@@ -69,15 +58,10 @@ def create_discrete_simulator(
     """
 
     if validate:
-        context.validate()
-    preds, order = build_topology(context)
-    return DiscreteSimulator(
-        context=context,
-        _preds_by_target=preds,
-        order=order,
-        underflow_rule=underflow_rule,
-        overflow_rule=overflow_rule,
-    )
+        validate_context(context)
+    predecessors, order = _build_topology(context)
+    return DiscreteSimulator(context=context, _predecessors_by_target=predecessors, _topological_node_order=order)
+
 
 @dataclass(frozen=True, slots=True)
 class DiscreteSimulator:
@@ -89,10 +73,16 @@ class DiscreteSimulator:
     """
 
     context: AnalyticContext
-    _preds_by_target: list[tuple[Pred, ...] | None]
-    order: list[int]
-    underflow_rule: UnderflowRule = UnderflowRule.TRUNCATE
-    overflow_rule: OverflowRule = OverflowRule.TRUNCATE
+    _predecessors_by_target: tuple[tuple[PredecessorTuple, ...] | None, ...]
+    _topological_node_order: tuple[NodeIndex, ...]
+
+    @property
+    def underflow_rule(self) -> UnderflowRule:
+        return self.context.underflow_rule
+
+    @property
+    def overflow_rule(self) -> OverflowRule:
+        return self.context.overflow_rule
 
     def run(self) -> tuple[SimulatedEvent, ...]:
         """Propagate events through the DAG to compute node PMFs.
@@ -108,27 +98,91 @@ class DiscreteSimulator:
         # simple append-only list would break because event indices are not
         # guaranteed to match the processing order.
         events: dict[int, SimulatedEvent] = {}
-        for idx in self.order:
-            ev = self.context.events[idx]
-            base = DiscretePMF.delta(ev.timestamp.earliest)
-            preds = self._preds_by_target[idx]
-            if preds is None:
-                pmf = base
-            else:
-                cur = None
-                for src, link in preds:
-                    edge_pmf = self.context.activities[(src, idx)][1].pmf
-                    candidate = events[src].pmf.convolve(edge_pmf)
-                    cur = candidate if cur is None else cur.maximum(candidate)
-                pmf = cur if cur is not None else base
+        for node_index in self._topological_node_order:
+            ev = self.context.events[node_index]
+            predecessors = self._predecessors_by_target[node_index]
+            is_origin = predecessors is None
+            if is_origin:
+                events[node_index] = SimulatedEvent(
+                    DiscretePMF.delta(ev.timestamp.earliest), ProbabilityMass(0.0), ProbabilityMass(0.0)
+                )
+                continue
+            assert len(predecessors) > 0, f"Event {node_index} has no predecessors, but is not an origin"
+
+            to_combine = []
+            for i, (src, link) in enumerate(predecessors):
+                edge_pmf = self.context.activities[(src, node_index)][1].pmf
+                candidate = events[src].pmf.convolve(edge_pmf)
+                to_combine.append(candidate)
+
+            resulting_pmf = to_combine[0]
+            if len(to_combine) > 1:
+                for next_pmf in to_combine[1:]:
+                    resulting_pmf = resulting_pmf.maximum(next_pmf)
+
             lb, ub = ev.bounds
-            pmf, u, o = apply_bounds(
-                pmf,
-                lb,
-                ub,
-                underflow_rule=self.underflow_rule,
-                overflow_rule=self.overflow_rule,
-            )
-            events[idx] = SimulatedEvent(pmf, u, o)
+            events[node_index] = self._convert_to_simulated_event(resulting_pmf, lb, ub)
 
         return tuple(events[i] for i in range(n_events))
+
+    def _convert_to_simulated_event(self, pmf: DiscretePMF, min_value: Second, max_value: Second) -> SimulatedEvent:
+        """Clip ``pmf`` to ``[min_value, max_value]`` according to the given rules."""
+
+        # FIXME: This should be a validation method, outside of the apply_bounds method.
+        if min_value > max_value:
+            raise ValueError("min_value must not exceed max_value")
+
+        assert min_value <= max_value, f"min_value ({min_value}) must not exceed max_value ({max_value})"
+        vals = pmf.values
+        probs = pmf.probabilities
+
+        under_mask = vals < min_value
+        over_mask = vals > max_value
+        under_mass = ProbabilityMass(probs[under_mask].sum())
+        over_mass = ProbabilityMass(probs[over_mask].sum())
+        keep_mask = ~(under_mask | over_mask)
+
+        new_vals = vals[keep_mask]
+        new_probs = probs[keep_mask]
+
+        # FIXME These checks/conditions are hard to grasp, do instead give them a variable name,
+        #  so that it is clear what they are checking.
+        if self.underflow_rule is UnderflowRule.TRUNCATE and float(under_mass) > 0.0:
+            if new_vals.size and np.isclose(new_vals[0], min_value):
+                new_probs[0] += under_mass
+            else:
+                new_vals = np.insert(new_vals, 0, min_value)
+                new_probs = np.insert(new_probs, 0, float(under_mass))
+            under_mass = ProbabilityMass(0.0)
+
+        if self.overflow_rule is OverflowRule.TRUNCATE and float(over_mass) > 0.0:
+            if new_vals.size and np.isclose(new_vals[-1], max_value):
+                new_probs[-1] += over_mass
+            else:
+                new_vals = np.append(new_vals, max_value)
+                new_probs = np.append(new_probs, float(over_mass))
+            over_mass = ProbabilityMass(0.0)
+
+        # FIXME: See  above, needs a variable name to clarify the condition.
+        to_add = ProbabilityMass(0.0)
+        if self.underflow_rule is UnderflowRule.REDISTRIBUTE and under_mass > 0.0:
+            to_add = under_mass
+            under_mass = ProbabilityMass(0.0)
+
+        if self.overflow_rule is OverflowRule.REDISTRIBUTE and over_mass > 0.0:
+            to_add += over_mass
+            over_mass = ProbabilityMass(0.0)
+
+        if to_add > 0.0:
+            # re-distribute the mass according to the probabilities
+            new_probs = new_probs + to_add * (new_probs / new_probs.sum())
+
+        clipped = DiscretePMF(new_vals, new_probs)
+        # FIXME: This should be a validation method, outside of the apply_bounds method.
+        clipped.validate()
+
+        # TODO: Replace this with a method that can cope with some numerical errors. (np.isclose or similar)
+        assert (
+            sum(clipped.probabilities) + float(under_mass) + float(over_mass) <= 1.0
+        ), "Total probability mass exceeds 1.0 after clipping"
+        return SimulatedEvent(clipped, underflow_mass, overflow_mass)

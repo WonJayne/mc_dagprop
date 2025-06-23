@@ -1,40 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import IntEnum, unique
-from typing import NewType
+from dataclasses import dataclass
 
 import numpy as np
 
-# Some comments on the code, things to improve or change:
-
-# Define a custom type for values expressed in seconds.  ``NewType`` keeps the
-# runtime representation as ``float`` but allows mypy or other type checkers to
-# distinguish it from plain floats.
-Second = NewType("Second", float)
-
-# Likewise for probability values.
-Probability = NewType("Probability", float)
-
-
-# Behaviours for mass outside the supported range.
-@unique
-class UnderflowRule(IntEnum):
-    """How to handle probability mass below a lower bound."""
-
-    TRUNCATE = 1
-    REMOVE = 2
-
-
-@unique
-class OverflowRule(IntEnum):
-    """How to handle probability mass above an upper bound."""
-
-    TRUNCATE = 1
-    REMOVE = 2
-
-
-# Please use from __future__ import annotations to ensure that the type hints are better readable
+from mc_dagprop.discrete import Second, ProbabilityMass
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,31 +12,39 @@ class DiscretePMF:
     """Simple probability mass function on an equidistant grid."""
 
     values: np.ndarray
-    probs: np.ndarray
-    step_size: Second = field(init=False, repr=False)
+    probabilities: np.ndarray
+    # FIXME: This should be an input, passed at the beginning, not calculated on init.
+    step: Second
 
     def __post_init__(self) -> None:
-        if len(self.values) != len(self.probs):
+        # FIXME See above: step_size should be an input, not calculated here.
+        if len(self.values) != len(self.probabilities):
             raise ValueError("values and probs must have same length")
         if len(self.values) < 2:
             step = 0.0
         else:
             diffs = np.diff(self.values)
+            # FIXME: General question why would you set a step size to 0.0?
             step = float(diffs[0]) if np.allclose(diffs, diffs[0]) else 0.0
+        # SEE fixme above: step_size should be an input, not calculated here.
         object.__setattr__(self, "step_size", Second(step))
+        # Validation should not be done all the time, maybe we actually have a case where it is less than 1 (total mass < 1)
+        assert self.step >= 0.0, "step size must be non-negative"
         self.validate()
 
+    # FIXME: This should be a validation method, outside of the __post_init__ method, and ideally a function that can be called separately.
     def validate(self) -> None:
-        if len(self.values) != len(self.probs):
+        """Validate the PMF properties."""
+        if len(self.values) != len(self.probabilities):
             raise ValueError("values and probs must have same length")
         if len(self.values) > 1 and not np.all(self.values[1:] >= self.values[:-1]):
             raise ValueError("values must be sorted in non-decreasing order")
-        if not np.isclose(self.probs.sum(), 1.0):
+        if not np.isclose(self.probabilities.sum(), 1.0):
             raise ValueError("probabilities must sum to 1.0")
 
+    # Move this to a validation method, outside of the class.
     def validate_alignment(self, step: Second) -> None:
         """Ensure that ``values`` align with ``step`` spacing."""
-
         if step <= 0.0:
             raise ValueError("step must be positive")
 
@@ -78,43 +56,39 @@ class DiscretePMF:
         if self.values.size > 0 and not np.isclose(self.values[0] % step, 0.0):
             raise ValueError("PMF values are not aligned to step grid")
 
-    # Step should be a static property, defined on init. Again, something that we can validate in a separate method.
-    @property
-    def step(self) -> Second:
-        return self.step_size
-
     @staticmethod
     def delta(v: Second) -> "DiscretePMF":
+        """Create a PMF that is a delta function at value `v`, so 100% probability at `v`."""
         return DiscretePMF(np.array([v], dtype=float), np.array([1.0], dtype=float))
 
+    @property
+    def total_mass(self) -> ProbabilityMass:
+        """Return the total mass of the PMF."""
+        return ProbabilityMass(self.probabilities.sum())
+
     def shift(self, delta: Second) -> "DiscretePMF":
-        return DiscretePMF(self.values + delta, self.probs.copy())
+        """Shift the PMF by `delta` seconds."""
+        return DiscretePMF(self.values + delta, self.probabilities.copy())
 
     def convolve(self, other: "DiscretePMF") -> "DiscretePMF":
-        if len(self.values) == 1 and len(other.values) == 1:
-            return DiscretePMF.delta(self.values[0] + other.values[0])
+        """Return the distribution of ``X + Y`` for two independent PMFs."""
+        is_delta = len(self.values) == 1
+        if is_delta:
+            other_is_delta = len(other.values) == 1
+            if other_is_delta:
+                # Both are delta functions, return a delta function at the sum of the values.
+                return DiscretePMF.delta(self.values[0] + other.values[0])
 
-        step = self.step or other.step
-        if step and np.isclose(step, other.step) and np.isclose(step, self.step):
-            start = self.values[0] + other.values[0]
-            probs = np.convolve(self.probs, other.probs)
-            values = start + step * np.arange(len(probs))
-            return DiscretePMF(values, probs)
+        step = self.step
+        assert self.step == other.step, f"PMFs must share a positive step size, got {self.step} and {other.step}"
+        if not step or not np.isclose(step, other.step) or not np.isclose(step, self.step):
+            # FIXME: This should be a validation method, outside of the convolve method.
+            raise ValueError("PMFs must share a positive step size")
 
-        # fallback: pairwise addition
-        vals = self.values[:, None] + other.values[None, :]
-        probs = self.probs[:, None] * other.probs[None, :]
-        flat_vals = vals.ravel()
-        flat_probs = probs.ravel()
-        order = np.argsort(flat_vals)
-        return DiscretePMF(flat_vals[order], flat_probs[order])
-
-    def cdf(self) -> np.ndarray:
-        return np.cumsum(self.probs)
-
-    def pmf_from_cdf(self, cdf: np.ndarray) -> "DiscretePMF":
-        probs = np.diff(np.concatenate([[0.0], cdf]))
-        return DiscretePMF(self.values.copy(), probs)
+        start = self.values[0] + other.values[0]
+        probs = np.convolve(self.probabilities, other.probabilities)
+        values = start + step * np.arange(len(probs))
+        return DiscretePMF(values, probs)
 
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
         """Return the distribution of ``max(X, Y)`` for two independent PMFs."""
@@ -122,6 +96,8 @@ class DiscretePMF:
             return DiscretePMF.delta(max(self.values[0], other.values[0]))
 
         step = float(self.step)
+        # FIXME: This should be a validation method, outside of the maximum method.
+        #  Should be validated before starting the propagation.
         if step <= 0.0 or not np.isclose(step, other.step):
             raise ValueError("PMFs must share a positive step size")
         if not np.isclose((self.values[0] - other.values[0]) % step, 0.0):
@@ -136,8 +112,8 @@ class DiscretePMF:
 
         pmf_self = np.zeros(len(grid))
         pmf_other = np.zeros(len(grid))
-        pmf_self[offset_self : offset_self + len(self.probs)] = self.probs
-        pmf_other[offset_other : offset_other + len(other.probs)] = other.probs
+        pmf_self[offset_self : offset_self + len(self.probabilities)] = self.probabilities
+        pmf_other[offset_other : offset_other + len(other.probabilities)] = other.probabilities
 
         cdf_self = np.cumsum(pmf_self)
         cdf_other = np.cumsum(pmf_other)
@@ -165,39 +141,46 @@ class DiscretePMF:
 
         pmf_self = np.zeros(len(grid))
         pmf_other = np.zeros(len(grid))
-        pmf_self[offset_self : offset_self + len(self.probs)] = self.probs
-        pmf_other[offset_other : offset_other + len(other.probs)] = other.probs
+        pmf_self[offset_self : offset_self + len(self.probabilities)] = self.probabilities
+        pmf_other[offset_other : offset_other + len(other.probabilities)] = other.probabilities
 
         cdf_self = np.cumsum(pmf_self)
         cdf_other = np.cumsum(pmf_other)
+        # FIXME: if we allow the trimming of PMFs (dropping values outside of the range), they might no longer be adding up to 1.0
         cdf_min = 1.0 - (1.0 - cdf_self) * (1.0 - cdf_other)
-        probs = np.diff(np.concatenate(([0.0], cdf_min)))
-        return DiscretePMF(grid, probs)
+        probabilities = np.diff(np.concatenate(([0.0], cdf_min)))
+        return DiscretePMF(grid, probabilities)
 
+    # FIXME not used? Candidate for removal?
     def truncate_right(self, max_value: Second) -> "DiscretePMF":
-        if max_value >= self.values[-1]:
+        no_need_to_truncate = max_value >= self.values[-1]
+        if no_need_to_truncate:
             return self
-        if max_value <= self.values[0]:
+        entirely_truncated = max_value <= self.values[0]
+        if entirely_truncated:
             pmf = DiscretePMF(np.array([max_value], dtype=float), np.array([1.0], dtype=float))
+            # FIXME: This should be a validation method, outside of the truncate_right method.
             pmf.validate()
             return pmf
         idx = np.searchsorted(self.values, max_value, side="right") - 1
         new_vals = self.values[: idx + 1]
-        new_probs = self.probs[: idx + 1]
-        overflow = self.probs[idx + 1 :].sum()
-        new_probs[-1] += overflow
-        new_probs = new_probs / new_probs.sum()
-        pmf = DiscretePMF(new_vals, new_probs)
+        new_probabilities = self.probabilities[: idx + 1]
+        overflow = self.probabilities[idx + 1 :].sum()
+        new_probabilities[-1] += overflow
+        new_probabilities = new_probabilities / new_probabilities.sum()
+        pmf = DiscretePMF(new_vals, new_probabilities)
+        # FIXME: This should be a validation method, outside of the truncate_right method.
         pmf.validate()
         return pmf
 
-    def truncate(self, min_value: Second, max_value: Second) -> tuple["DiscretePMF", Probability, Probability]:
+    # FIXME not used? Candidate for removal?
+    def truncate(self, min_value: Second, max_value: Second) -> tuple["DiscretePMF", ProbabilityMass, ProbabilityMass]:
         """Truncate the PMF to ``[min_value, max_value]`` and return under/overflow mass."""
-        under = Probability(self.probs[self.values < min_value].sum())
-        over = Probability(self.probs[self.values > max_value].sum())
+        under = ProbabilityMass(self.probabilities[self.values < min_value].sum())
+        over = ProbabilityMass(self.probabilities[self.values > max_value].sum())
         mask = (self.values >= min_value) & (self.values <= max_value)
         new_vals = self.values[mask]
-        new_probs = self.probs[mask]
+        new_probs = self.probabilities[mask]
         if new_vals.size == 0:
             new_vals = np.array([min_value], dtype=float)
             new_probs = np.array([0.0], dtype=float)
@@ -205,55 +188,3 @@ class DiscretePMF:
         pmf = DiscretePMF(new_vals, new_probs)
         pmf.validate()
         return pmf, under, over
-
-
-def apply_bounds(
-    pmf: DiscretePMF,
-    min_value: Second,
-    max_value: Second,
-    underflow_rule: UnderflowRule = UnderflowRule.TRUNCATE,
-    overflow_rule: OverflowRule = OverflowRule.TRUNCATE,
-) -> tuple[DiscretePMF, Probability, Probability]:
-    """Clip ``pmf`` to ``[min_value, max_value]`` according to the given rules."""
-
-    if min_value > max_value:
-        raise ValueError("min_value must not exceed max_value")
-
-    vals = pmf.values
-    probs = pmf.probs
-
-    under_mask = vals < min_value
-    over_mask = vals > max_value
-    under_mass = Probability(float(probs[under_mask].sum()))
-    over_mass = Probability(float(probs[over_mask].sum()))
-    keep_mask = ~(under_mask | over_mask)
-
-    new_vals = vals[keep_mask]
-    new_probs = probs[keep_mask]
-
-    if underflow_rule is UnderflowRule.TRUNCATE and float(under_mass) > 0.0:
-        if new_vals.size and np.isclose(new_vals[0], min_value):
-            new_probs[0] += float(under_mass)
-        else:
-            new_vals = np.insert(new_vals, 0, min_value)
-            new_probs = np.insert(new_probs, 0, float(under_mass))
-        under_mass = Probability(0.0)
-
-    if overflow_rule is OverflowRule.TRUNCATE and float(over_mass) > 0.0:
-        if new_vals.size and np.isclose(new_vals[-1], max_value):
-            new_probs[-1] += float(over_mass)
-        else:
-            new_vals = np.append(new_vals, max_value)
-            new_probs = np.append(new_probs, float(over_mass))
-        over_mass = Probability(0.0)
-
-    if float(under_mass) > 0.0 or float(over_mass) > 0.0:
-        if new_probs.sum() > 0.0:
-            new_probs = new_probs / new_probs.sum()
-        else:
-            new_vals = np.array([min_value], dtype=float)
-            new_probs = np.array([0.0], dtype=float)
-
-    clipped = DiscretePMF(new_vals, new_probs)
-    clipped.validate()
-    return clipped, under_mass, over_mass

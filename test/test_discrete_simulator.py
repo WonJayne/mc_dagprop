@@ -9,8 +9,6 @@ from mc_dagprop import (
     AnalyticContext,
     ScheduledEvent,
     DiscretePMF,
-    UnderflowRule,
-    OverflowRule,
     EventTimestamp,
     GenericDelayGenerator,
     SimActivity,
@@ -19,6 +17,7 @@ from mc_dagprop import (
     Simulator,
     create_discrete_simulator,
 )
+from mc_dagprop.discrete import UnderflowRule, OverflowRule
 from mc_dagprop.discrete.context import AnalyticEdge, SimulatedEvent
 
 
@@ -66,8 +65,8 @@ class TestDiscreteSimulator(unittest.TestCase):
         counts = np.bincount(np.array(samples, dtype=int))[1:4]
         mc_probs = counts / counts.sum()
         self.assertTrue(np.allclose(final.values, [1.0, 2.0, 3.0]))
-        self.assertTrue(np.allclose(final.probs, [0.25, 0.5, 0.25], atol=0.05))
-        self.assertTrue(np.allclose(mc_probs, final.probs, atol=0.05))
+        self.assertTrue(np.allclose(final.probabilities, [0.25, 0.5, 0.25], atol=0.05))
+        self.assertTrue(np.allclose(mc_probs, final.probabilities, atol=0.05))
 
     def test_event_without_predecessor(self) -> None:
         ds = create_discrete_simulator(self.a_context)
@@ -75,7 +74,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         first = events[0].pmf
         earliest = self.events[0].timestamp.earliest
         self.assertTrue(np.allclose(first.values, [earliest]))
-        self.assertTrue(np.allclose(first.probs, [1.0]))
+        self.assertTrue(np.allclose(first.probabilities, [1.0]))
         mc_res = self.mc_sim.run(seed=0)
         self.assertEqual(mc_res.cause_event[0], -1)
 
@@ -143,19 +142,14 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(np.allclose(events_res[1].pmf.values, [1.0, 1.5]))
         self.assertTrue(np.all(events_res[1].pmf.values <= 1.5))
         self.assertTrue(np.all(events_res[2].pmf.values <= 1.8))
-        self.assertAlmostEqual(events_res[2].pmf.probs.sum(), 1.0, places=6)
+        self.assertAlmostEqual(events_res[2].pmf.probabilities.sum(), 1.0, places=6)
 
     def test_rule_combinations(self) -> None:
         events = (
             ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
             ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0), bounds=(0.0, 1.0)),
         )
-        edge = AnalyticEdge(
-            DiscretePMF(
-                np.array([-1.0, 0.0, 1.0, 2.0]),
-                np.array([0.5, 0.0, 0.0, 0.5]),
-            )
-        )
+        edge = AnalyticEdge(DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5])))
         ctx = AnalyticContext(
             events=events,
             activities={(0, 1): (0, edge)},
@@ -171,11 +165,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(np.allclose(res_default.pmf.values, [0.0, 1.0]))
 
         with self.assertRaises(ValueError):
-            create_discrete_simulator(
-                ctx,
-                underflow_rule=UnderflowRule.REMOVE,
-                overflow_rule=OverflowRule.REMOVE,
-            ).run()
+            create_discrete_simulator(ctx, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.REMOVE).run()
 
         ds_mixed1 = create_discrete_simulator(
             ctx, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.TRUNCATE
