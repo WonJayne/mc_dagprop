@@ -13,24 +13,15 @@ class DiscretePMF:
 
     values: np.ndarray
     probabilities: np.ndarray
-    # FIXME: This should be an input, passed at the beginning, not calculated on init.
-    step: Second
+    step: Second = Second(1.0)
 
     def __post_init__(self) -> None:
-        # FIXME See above: step_size should be an input, not calculated here.
         if len(self.values) != len(self.probabilities):
             raise ValueError("values and probs must have same length")
-        if len(self.values) < 2:
-            step = 0.0
-        else:
-            diffs = np.diff(self.values)
-            # FIXME: General question why would you set a step size to 0.0?
-            step = float(diffs[0]) if np.allclose(diffs, diffs[0]) else 0.0
-        # SEE fixme above: step_size should be an input, not calculated here.
-        object.__setattr__(self, "step_size", Second(step))
-        # Validation should not be done all the time, maybe we actually have a case where it is less than 1 (total mass < 1)
-        assert self.step >= 0.0, "step size must be non-negative"
+        if self.step <= 0.0:
+            raise ValueError("step must be positive")
         self.validate()
+        self.validate_alignment(self.step)
 
     # FIXME: This should be a validation method, outside of the __post_init__ method, and ideally a function that can be called separately.
     def validate(self) -> None:
@@ -45,6 +36,8 @@ class DiscretePMF:
     # Move this to a validation method, outside of the class.
     def validate_alignment(self, step: Second) -> None:
         """Ensure that ``values`` align with ``step`` spacing."""
+        if not np.isclose(self.step, step):
+            raise ValueError(f"PMF step {self.step} does not match expected {step}")
         if step <= 0.0:
             raise ValueError("step must be positive")
 
@@ -57,9 +50,9 @@ class DiscretePMF:
             raise ValueError("PMF values are not aligned to step grid")
 
     @staticmethod
-    def delta(v: Second) -> "DiscretePMF":
-        """Create a PMF that is a delta function at value `v`, so 100% probability at `v`."""
-        return DiscretePMF(np.array([v], dtype=float), np.array([1.0], dtype=float))
+    def delta(v: Second, step: Second = Second(1.0)) -> "DiscretePMF":
+        """Return a delta PMF at value ``v`` using ``step`` spacing."""
+        return DiscretePMF(np.array([v], dtype=float), np.array([1.0], dtype=float), step=step)
 
     @property
     def total_mass(self) -> ProbabilityMass:
@@ -67,8 +60,8 @@ class DiscretePMF:
         return ProbabilityMass(self.probabilities.sum())
 
     def shift(self, delta: Second) -> "DiscretePMF":
-        """Shift the PMF by `delta` seconds."""
-        return DiscretePMF(self.values + delta, self.probabilities.copy())
+        """Shift the PMF by ``delta`` seconds."""
+        return DiscretePMF(self.values + delta, self.probabilities.copy(), step=self.step)
 
     def convolve(self, other: "DiscretePMF") -> "DiscretePMF":
         """Return the distribution of ``X + Y`` for two independent PMFs."""
@@ -77,7 +70,7 @@ class DiscretePMF:
             other_is_delta = len(other.values) == 1
             if other_is_delta:
                 # Both are delta functions, return a delta function at the sum of the values.
-                return DiscretePMF.delta(self.values[0] + other.values[0])
+                return DiscretePMF.delta(self.values[0] + other.values[0], step=self.step)
 
         step = self.step
         assert self.step == other.step, f"PMFs must share a positive step size, got {self.step} and {other.step}"
@@ -88,7 +81,7 @@ class DiscretePMF:
         start = self.values[0] + other.values[0]
         probs = np.convolve(self.probabilities, other.probabilities)
         values = start + step * np.arange(len(probs))
-        return DiscretePMF(values, probs)
+        return DiscretePMF(values, probs, step=self.step)
 
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
         """Return ``max(X, Y)`` for two independent PMFs.
@@ -97,7 +90,7 @@ class DiscretePMF:
         distributions when an event has multiple predecessors.
         """
         if len(self.values) == 1 and len(other.values) == 1:
-            return DiscretePMF.delta(max(self.values[0], other.values[0]))
+            return DiscretePMF.delta(max(self.values[0], other.values[0]), step=self.step)
 
         step = float(self.step)
         # FIXME: This should be a validation method, outside of the maximum method.
@@ -123,5 +116,5 @@ class DiscretePMF:
         cdf_other = np.cumsum(pmf_other)
         cdf_max = cdf_self * cdf_other
         probs = np.diff(np.concatenate(([0.0], cdf_max)))
-        return DiscretePMF(grid, probs)
+        return DiscretePMF(grid, probs, step=self.step)
 

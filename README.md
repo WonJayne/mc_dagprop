@@ -180,7 +180,7 @@ events = (
     SimEvent("A", EventTimestamp(0, 10, 0)),
     SimEvent("B", EventTimestamp(0, 10, 0)),
 )
-activities = {(0, 1): (0, DiscretePMF([1.0, 2.0], [0.5, 0.5]))}
+activities = {(0, 1): (0, DiscretePMF([1.0, 2.0], [0.5, 0.5], step=1.0))}
 precedence = (
     (1, ((0, 0),)),
 )
