@@ -37,8 +37,6 @@ class SimulatedEvent:
     overflow: float
 
 
-# TODO: we should have a scheduled event and a simulated event, where the scheduled event has a timestamp and bounds,
-#  while the simulated event has then the distribution of the timestamps as well as the over/underflow's
 
 
 @dataclass
