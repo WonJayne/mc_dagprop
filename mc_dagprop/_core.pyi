@@ -1,6 +1,6 @@
 # mc_dagprop/_core.pyi
-from collections.abc import Iterable, Mapping, Sequence
-from typing import Collection, TypeAlias
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from typing import TypeAlias
 
 from numpy._typing import NDArray
 

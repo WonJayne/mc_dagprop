@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import List
+
 
 from .context import AnalyticContext
 from .pmf import DiscretePMF
@@ -25,7 +25,7 @@ class DiscreteSimulator:
             indegree[tgt] = len(preds)
             for src, _ in preds:
                 adjacency[src].append(tgt)
-        order: List[int] = []
+        order: list[int] = []
         q = deque(i for i, deg in enumerate(indegree) if deg == 0)
         while q:
             n = q.popleft()
@@ -39,11 +39,11 @@ class DiscreteSimulator:
         self._preds_by_target = preds_by_target
         self.order = order
 
-    def run(self) -> List[DiscretePMF]:
+    def run(self) -> list[DiscretePMF]:
         n_events = len(self.context.events)
-        event_pmfs: List[DiscretePMF] = [None] * n_events  # type: ignore
-        under: List[float] = [0.0] * n_events
-        over: List[float] = [0.0] * n_events
+        event_pmfs: list[DiscretePMF] = [None] * n_events  # type: ignore
+        under: list[float] = [0.0] * n_events
+        over: list[float] = [0.0] * n_events
         for idx in self.order:
             ev = self.context.events[idx]
             base = DiscretePMF.delta(ev.timestamp.earliest)

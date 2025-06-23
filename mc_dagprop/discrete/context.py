@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+
 
 import numpy as np
 
@@ -23,14 +23,14 @@ class AnalyticEdge:
 class AnalyticEvent:
     id: str
     timestamp: EventTimestamp
-    bounds: Tuple[float, float] | None = None
+    bounds: tuple[float, float] | None = None
 
 
 @dataclass
 class AnalyticContext:
-    events: List[AnalyticEvent]
-    activities: Dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
-    precedence_list: List[tuple[NodeIndex, List[Pred]]]
+    events: list[AnalyticEvent]
+    activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
+    precedence_list: list[tuple[NodeIndex, list[Pred]]]
     max_delay: float = 0.0
     step_size: float = 0.0
 
