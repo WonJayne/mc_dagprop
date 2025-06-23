@@ -52,10 +52,24 @@ def create_discrete_simulator(
     *,
     underflow_rule: UnderflowRule = UnderflowRule.TRUNCATE,
     overflow_rule: OverflowRule = OverflowRule.TRUNCATE,
+    validate: bool = True,
 ) -> "DiscreteSimulator":
-    """Return a :class:`DiscreteSimulator` with topology built for ``context``."""
+    """Return a :class:`DiscreteSimulator` with topology built for ``context``.
 
-    context.validate()
+    Parameters
+    ----------
+    context:
+        Analytic description of the DAG to simulate.
+    underflow_rule, overflow_rule:
+        How to handle probability mass outside event bounds.
+    validate:
+        When ``True`` (default), ``context.validate()`` is invoked before
+        creating the simulator. Set to ``False`` if the caller guarantees that
+        the context is already valid.
+    """
+
+    if validate:
+        context.validate()
     preds, order = build_topology(context)
     return DiscreteSimulator(
         context=context,
