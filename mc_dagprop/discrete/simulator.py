@@ -104,7 +104,9 @@ class DiscreteSimulator:
             is_origin = predecessors is None
             if is_origin:
                 events[node_index] = SimulatedEvent(
-                    DiscretePMF.delta(ev.timestamp.earliest), ProbabilityMass(0.0), ProbabilityMass(0.0)
+                    DiscretePMF.delta(ev.timestamp.earliest, step=self.context.step_size),
+                    ProbabilityMass(0.0),
+                    ProbabilityMass(0.0),
                 )
                 continue
             assert len(predecessors) > 0, f"Event {node_index} has no predecessors, but is not an origin"
@@ -177,7 +179,7 @@ class DiscreteSimulator:
             # re-distribute the mass according to the probabilities
             new_probs = new_probs + to_add * (new_probs / new_probs.sum())
 
-        clipped = DiscretePMF(new_vals, new_probs)
+        clipped = DiscretePMF(new_vals, new_probs, step=self.context.step_size)
         # FIXME: This should be a validation method, outside of the apply_bounds method.
         clipped.validate()
 
