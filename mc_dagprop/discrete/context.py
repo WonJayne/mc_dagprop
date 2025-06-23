@@ -111,6 +111,9 @@ def validate_context(context: AnalyticContext) -> None:
 
     n_events = len(context.events)
 
+    if context.step_size <= 0.0:
+        raise ValueError("step_size must be positive")
+
     # Validate scheduled events
     for i, ev in enumerate(context.events):
         ts = ev.timestamp
