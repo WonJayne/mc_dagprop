@@ -7,7 +7,7 @@ import numpy as np
 
 from . import ProbabilityMass, Second, UnderflowRule, OverflowRule, NodeIndex, EdgeIndex
 from .context import AnalyticContext, PredecessorTuple, SimulatedEvent, validate_context
-from .. import DiscretePMF
+from .pmf import DiscretePMF
 
 
 def _build_topology(
@@ -185,4 +185,4 @@ class DiscreteSimulator:
         assert (
             sum(clipped.probabilities) + float(under_mass) + float(over_mass) <= 1.0
         ), "Total probability mass exceeds 1.0 after clipping"
-        return SimulatedEvent(clipped, underflow_mass, overflow_mass)
+        return SimulatedEvent(clipped, under_mass, over_mass)
