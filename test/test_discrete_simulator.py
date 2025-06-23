@@ -92,6 +92,21 @@ class TestDiscreteSimulator(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
 
+    def test_skip_validation(self) -> None:
+        act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5])))
+        ctx = AnalyticContext(
+            events=self.events,
+            activities={(0, 1): (0, act0)},
+            precedence_list=((1, ((0, 0),)),),
+            max_delay=5.0,
+            step_size=2.0,
+        )
+
+        # Should not raise when validation is disabled
+        sim = create_discrete_simulator(ctx, validate=False)
+        result = sim.run()
+        self.assertEqual(len(result), 3)
+
     def test_misaligned_values(self) -> None:
         act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.5]), np.array([0.5, 0.5])))
         ctx = AnalyticContext(
