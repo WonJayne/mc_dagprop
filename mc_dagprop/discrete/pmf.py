@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum, auto
+from enum import IntEnum, unique
 from typing import NewType
 
 import numpy as np
@@ -17,18 +17,20 @@ Second = NewType("Second", float)
 Probability = NewType("Probability", float)
 
 # Behaviours for mass outside the supported range.
-class UnderflowRule(Enum):
+@unique
+class UnderflowRule(IntEnum):
     """How to handle probability mass below a lower bound."""
 
-    TRUNCATE = auto()
-    REMOVE = auto()
+    TRUNCATE = 1
+    REMOVE = 2
 
 
-class OverflowRule(Enum):
+@unique
+class OverflowRule(IntEnum):
     """How to handle probability mass above an upper bound."""
 
-    TRUNCATE = auto()
-    REMOVE = auto()
+    TRUNCATE = 1
+    REMOVE = 2
 
 # Please use from __future__ import annotations to ensure that the type hints are better readable
 
