@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 from collections import deque
+from dataclasses import dataclass, field
 
-from .context import AnalyticContext
+from .context import AnalyticContext, Pred
 from .pmf import DiscretePMF
 
-# TODO: Make this a dataclass with frozen, slots etc
+@dataclass(frozen=True, slots=True)
 class DiscreteSimulator:
     """Propagate discrete PMFs through a DAG."""
 
-    def __init__(self, context: AnalyticContext):
-        self.context = context
+    context: AnalyticContext
+    _preds_by_target: list[tuple[Pred, ...] | None] = field(init=False, repr=False)
+    order: list[int] = field(init=False, repr=False)
+    underflow: list[float] = field(init=False, repr=False)
+    overflow: list[float] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
         self.context.validate()
+        object.__setattr__(self, "underflow", [])
+        object.__setattr__(self, "overflow", [])
         self._build_topology()
 
     def _build_topology(self) -> None:
@@ -36,8 +44,8 @@ class DiscreteSimulator:
                     q.append(dst)
         if len(order) != event_count:
             raise RuntimeError("Invalid DAG: cycle detected")
-        self._preds_by_target = preds_by_target
-        self.order = order
+        object.__setattr__(self, "_preds_by_target", preds_by_target)
+        object.__setattr__(self, "order", order)
 
     def run(self) -> tuple[DiscretePMF, ...]:
         # FIXME: here, I would expect to get a tuple of simulated Events, each with a PMF.
@@ -66,6 +74,6 @@ class DiscreteSimulator:
             event_pmfs[idx] = pmf
         # FIXME: Over and underflow should be given to the individual events, as this allows the user to
         #  investigate the propagation of the PMF in more detail.
-        self.underflow = under
-        self.overflow = over
+        object.__setattr__(self, "underflow", under)
+        object.__setattr__(self, "overflow", over)
         return event_pmfs
