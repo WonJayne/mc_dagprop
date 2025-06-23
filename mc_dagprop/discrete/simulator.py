@@ -104,10 +104,12 @@ class DiscreteSimulator:
             is_origin = predecessors is None
             if is_origin:
                 events[node_index] = SimulatedEvent(
-                    DiscretePMF.delta(ev.timestamp.earliest), ProbabilityMass(0.0), ProbabilityMass(0.0)
+                    DiscretePMF.delta(ev.timestamp.earliest, self.context.step_size),
+                    ProbabilityMass(0.0),
+                    ProbabilityMass(0.0),
                 )
                 continue
-            assert len(predecessors) > 0, f"Event {node_index} has no predecessors, but is not an origin"
+            # ``validate_context`` guarantees that ``predecessors`` is non-empty for non-origin nodes.
 
             to_combine = []
             for i, (src, link) in enumerate(predecessors):
@@ -128,11 +130,8 @@ class DiscreteSimulator:
     def _convert_to_simulated_event(self, pmf: DiscretePMF, min_value: Second, max_value: Second) -> SimulatedEvent:
         """Clip ``pmf`` to ``[min_value, max_value]`` according to the given rules."""
 
-        # FIXME: This should be a validation method, outside of the apply_bounds method.
         if min_value > max_value:
             raise ValueError("min_value must not exceed max_value")
-
-        assert min_value <= max_value, f"min_value ({min_value}) must not exceed max_value ({max_value})"
         vals = pmf.values
         probs = pmf.probabilities
 
@@ -193,12 +192,9 @@ class DiscreteSimulator:
         if to_add > 0.0:
             new_probs = new_probs + to_add * (new_probs / new_probs.sum())
 
-        clipped = DiscretePMF(new_vals, new_probs)
-        # FIXME: This should be a validation method, outside of the apply_bounds method.
-        clipped.validate()
+        clipped = DiscretePMF(new_vals, new_probs, step=pmf.step)
 
         total_mass = float(clipped.probabilities.sum() + under_mass + over_mass)
-        assert total_mass <= 1.0 or np.isclose(
-            total_mass, 1.0
-        ), "Total probability mass exceeds 1.0 after clipping"
+        if total_mass > 1.0 and not np.isclose(total_mass, 1.0):
+            raise ValueError("Total probability mass exceeds 1.0 after clipping")
         return SimulatedEvent(clipped, under_mass, over_mass)

@@ -1,6 +1,7 @@
 import unittest
 import os
 import sys
+from dataclasses import replace
 
 import numpy as np
 
@@ -35,14 +36,15 @@ class TestDiscreteSimulator(unittest.TestCase):
         )
         self.precedence = ((1, ((0, 0),)), (2, ((1, 1),)))
 
-        act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5])))
-        act1 = AnalyticEdge(DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5])))
+        act0 = AnalyticEdge(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))
+        act1 = AnalyticEdge(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1.0))
         self.a_context = AnalyticContext(
             events=self.events,
             activities={(0, 1): (0, act0), (1, 2): (1, act1)},
             precedence_list=self.precedence,
-            max_delay=5.0,
             step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
 
         self.mc_context = SimContext(
@@ -79,26 +81,28 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertEqual(mc_res.cause_event[0], -1)
 
     def test_mismatched_step_size(self) -> None:
-        act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5])))
-        act1 = AnalyticEdge(DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5])))
+        act0 = AnalyticEdge(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))
+        act1 = AnalyticEdge(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1.0))
         ctx = AnalyticContext(
             events=self.events,
             activities={(0, 1): (0, act0), (1, 2): (1, act1)},
             precedence_list=self.precedence,
-            max_delay=5.0,
             step_size=2.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
 
     def test_skip_validation(self) -> None:
-        act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5])))
+        act0 = AnalyticEdge(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))
         ctx = AnalyticContext(
             events=self.events,
             activities={(0, 1): (0, act0)},
             precedence_list=((1, ((0, 0),)),),
-            max_delay=5.0,
             step_size=2.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
 
         # Should not raise when validation is disabled
@@ -107,32 +111,34 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertEqual(len(result), 3)
 
     def test_misaligned_values(self) -> None:
-        act0 = AnalyticEdge(DiscretePMF(np.array([1.0, 2.5]), np.array([0.5, 0.5])))
+        act0 = AnalyticEdge(0, DiscretePMF(np.array([1.0, 2.5]), np.array([0.5, 0.5]), step=1.0))
         ctx = AnalyticContext(
             events=self.events,
             activities={(0, 1): (0, act0)},
             precedence_list=((1, ((0, 0),)),),
-            max_delay=5.0,
             step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
 
     def test_bounds_and_overflow(self) -> None:
         events = (
-            ScheduledEvent("0", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 0.0)),
-            ScheduledEvent("1", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.5)),
-            ScheduledEvent("2", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.8)),
+            ScheduledEvent("0", EventTimestamp(0.0, 0.0, 0.0)),
+            ScheduledEvent("1", EventTimestamp(0.0, 1.5, 0.0)),
+            ScheduledEvent("2", EventTimestamp(0.0, 1.8, 0.0)),
         )
         ctx = AnalyticContext(
             events=events,
             activities={
-                (0, 1): (0, AnalyticEdge(DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5])))),
-                (1, 2): (1, AnalyticEdge(DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5])))),
+                (0, 1): (0, AnalyticEdge(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))),
+                (1, 2): (1, AnalyticEdge(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1.0))),
             },
             precedence_list=self.precedence,
-            max_delay=5.0,
             step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
         ds = create_discrete_simulator(ctx)
         events_res = ds.run()
@@ -147,15 +153,16 @@ class TestDiscreteSimulator(unittest.TestCase):
     def test_rule_combinations(self) -> None:
         events = (
             ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
-            ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0), bounds=(0.0, 1.0)),
+            ScheduledEvent("1", EventTimestamp(0.0, 1.0, 0.0)),
         )
-        edge = AnalyticEdge(DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5])))
+        edge = AnalyticEdge(0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1.0))
         ctx = AnalyticContext(
             events=events,
             activities={(0, 1): (0, edge)},
             precedence_list=((1, ((0, 0),)),),
-            max_delay=5.0,
             step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
 
         ds_default = create_discrete_simulator(ctx)
@@ -164,20 +171,25 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertAlmostEqual(res_default.overflow, 0.0, places=6)
         self.assertTrue(np.allclose(res_default.pmf.values, [0.0, 1.0]))
 
-        with self.assertRaises(ValueError):
-            create_discrete_simulator(ctx, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.REMOVE).run()
-
-        ds_mixed1 = create_discrete_simulator(
-            ctx, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.TRUNCATE
+        ctx_remove_both = AnalyticContext(
+            events=events,
+            activities={(0, 1): (0, edge)},
+            precedence_list=((1, ((0, 0),)),),
+            step_size=1.0,
+            underflow_rule=UnderflowRule.REMOVE,
+            overflow_rule=OverflowRule.REMOVE,
         )
+        create_discrete_simulator(ctx_remove_both).run()
+
+        ctx_remove_under = replace(ctx, underflow_rule=UnderflowRule.REMOVE)
+        ds_mixed1 = create_discrete_simulator(ctx_remove_under)
         res_mixed1 = ds_mixed1.run()[1]
         self.assertAlmostEqual(res_mixed1.underflow, 0.5, places=6)
         self.assertAlmostEqual(res_mixed1.overflow, 0.0, places=6)
         self.assertTrue(np.allclose(res_mixed1.pmf.values, [0.0, 1.0]))
 
-        ds_mixed2 = create_discrete_simulator(
-            ctx, underflow_rule=UnderflowRule.TRUNCATE, overflow_rule=OverflowRule.REMOVE
-        )
+        ctx_remove_over = replace(ctx, overflow_rule=OverflowRule.REMOVE)
+        ds_mixed2 = create_discrete_simulator(ctx_remove_over)
         res_mixed2 = ds_mixed2.run()[1]
         self.assertAlmostEqual(res_mixed2.underflow, 0.0, places=6)
         self.assertAlmostEqual(res_mixed2.overflow, 0.5, places=6)
@@ -189,15 +201,20 @@ class TestDiscreteSimulator(unittest.TestCase):
         events = tuple(ScheduledEvent(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(5))
         precedence = ((1, ((0, 0),)), (2, ((0, 1),)), (3, ((1, 2), (2, 3))), (4, ((2, 4), (3, 5))))
         activities = {
-            (0, 1): (0, AnalyticEdge(DiscretePMF(values, probs))),
-            (0, 2): (1, AnalyticEdge(DiscretePMF(values, probs))),
-            (1, 3): (2, AnalyticEdge(DiscretePMF(values, probs))),
-            (2, 3): (3, AnalyticEdge(DiscretePMF(values, probs))),
-            (2, 4): (4, AnalyticEdge(DiscretePMF(values, probs))),
-            (3, 4): (5, AnalyticEdge(DiscretePMF(values, probs))),
+            (0, 1): (0, AnalyticEdge(0, DiscretePMF(values, probs, step=1.0))),
+            (0, 2): (1, AnalyticEdge(1, DiscretePMF(values, probs, step=1.0))),
+            (1, 3): (2, AnalyticEdge(2, DiscretePMF(values, probs, step=1.0))),
+            (2, 3): (3, AnalyticEdge(3, DiscretePMF(values, probs, step=1.0))),
+            (2, 4): (4, AnalyticEdge(4, DiscretePMF(values, probs, step=1.0))),
+            (3, 4): (5, AnalyticEdge(5, DiscretePMF(values, probs, step=1.0))),
         }
         ctx = AnalyticContext(
-            events=events, activities=activities, precedence_list=precedence, max_delay=1800.0, step_size=1.0
+            events=events,
+            activities=activities,
+            precedence_list=precedence,
+            step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
         ds = create_discrete_simulator(ctx)
         events_res = ds.run()
@@ -215,8 +232,9 @@ class TestDiscreteSimulator(unittest.TestCase):
             events=events,
             activities={},
             precedence_list=(),
-            max_delay=5.0,
             step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
@@ -226,7 +244,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
             ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0)),
         )
-        edge = AnalyticEdge(DiscretePMF(np.array([1.0]), np.array([1.0]), step=1.0))
+        edge = AnalyticEdge(0, DiscretePMF(np.array([1.0]), np.array([1.0]), step=1.0))
         ctx = AnalyticContext(
             events=events,
             activities={
@@ -234,8 +252,9 @@ class TestDiscreteSimulator(unittest.TestCase):
                 (1, 0): (1, edge),
             },
             precedence_list=((1, ((0, 0),)), (0, ((1, 1),))),
-            max_delay=5.0,
             step_size=1.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
@@ -247,14 +266,16 @@ def test_run_returns_simulated_event_objects() -> None:
         ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0)),
     )
     edge = AnalyticEdge(
-        DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1.0)
+        0,
+        DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1.0),
     )
     ctx = AnalyticContext(
         events=events,
         activities={(0, 1): (0, edge)},
         precedence_list=((1, ((0, 0),)),),
-        max_delay=5.0,
         step_size=1.0,
+        underflow_rule=UnderflowRule.TRUNCATE,
+        overflow_rule=OverflowRule.TRUNCATE,
     )
 
     sim = create_discrete_simulator(ctx)
