@@ -3,6 +3,7 @@ import numpy as np
 
 from mc_dagprop import (
     AnalyticContext,
+    AnalyticEvent,
     DiscretePMF,
     DiscreteSimulator,
     EventTimestamp,
@@ -18,6 +19,11 @@ from mc_dagprop.discrete.context import AnalyticEdge
 class TestDiscreteSimulator(unittest.TestCase):
     def setUp(self) -> None:
         self.events = [
+            AnalyticEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
+            AnalyticEvent("1", EventTimestamp(0.0, 100.0, 0.0)),
+            AnalyticEvent("2", EventTimestamp(0.0, 100.0, 0.0)),
+        ]
+        self.mc_events = [
             SimEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
             SimEvent("1", EventTimestamp(0.0, 100.0, 0.0)),
             SimEvent("2", EventTimestamp(0.0, 100.0, 0.0)),
@@ -35,7 +41,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         )
 
         self.mc_context = SimContext(
-            events=self.events,
+            events=self.mc_events,
             activities={(0, 1): (0, SimActivity(0.0, 1)), (1, 2): (1, SimActivity(0.0, 2))},
             precedence_list=self.precedence,
             max_delay=5.0,
@@ -68,6 +74,29 @@ class TestDiscreteSimulator(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             DiscreteSimulator(ctx)
+
+    def test_bounds_and_overflow(self) -> None:
+        events = [
+            AnalyticEvent("0", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 0.0)),
+            AnalyticEvent("1", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.5)),
+            AnalyticEvent("2", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.8)),
+        ]
+        ctx = AnalyticContext(
+            events=events,
+            activities={(0, 1): (0, AnalyticEdge(DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5])))),
+                        (1, 2): (1, AnalyticEdge(DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]))))},
+            precedence_list=self.precedence,
+            max_delay=5.0,
+            step_size=1.0,
+        )
+        ds = DiscreteSimulator(ctx)
+        pmfs = ds.run()
+        self.assertAlmostEqual(ds.overflow[1], 0.5, places=6)
+        self.assertAlmostEqual(ds.overflow[2], 0.5, places=6)
+        self.assertAlmostEqual(sum(ds.overflow), 1.0, places=6)
+        self.assertTrue(np.all(pmfs[1].values <= 1.5))
+        self.assertTrue(np.all(pmfs[2].values <= 1.8))
+        self.assertAlmostEqual(pmfs[2].probs.sum(), 1.0, places=6)
 
 
 if __name__ == "__main__":

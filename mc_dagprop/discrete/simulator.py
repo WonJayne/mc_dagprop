@@ -40,18 +40,28 @@ class DiscreteSimulator:
         self.order = order
 
     def run(self) -> List[DiscretePMF]:
-        event_pmfs: List[DiscretePMF] = [None] * len(self.context.events)  # type: ignore
+        n_events = len(self.context.events)
+        event_pmfs: List[DiscretePMF] = [None] * n_events  # type: ignore
+        under: List[float] = [0.0] * n_events
+        over: List[float] = [0.0] * n_events
         for idx in self.order:
             ev = self.context.events[idx]
             base = DiscretePMF.delta(ev.timestamp.earliest)
             preds = self._preds_by_target[idx]
             if preds is None:
-                event_pmfs[idx] = base
-                continue
-            cur = None
-            for src, link in preds:
-                edge_pmf = self.context.activities[(src, idx)][1].pmf
-                candidate = event_pmfs[src].convolve(edge_pmf)
-                cur = candidate if cur is None else cur.maximum(candidate)
-            event_pmfs[idx] = cur if cur is not None else base
+                pmf = base
+            else:
+                cur = None
+                for src, link in preds:
+                    edge_pmf = self.context.activities[(src, idx)][1].pmf
+                    candidate = event_pmfs[src].convolve(edge_pmf)
+                    cur = candidate if cur is None else cur.maximum(candidate)
+                pmf = cur if cur is not None else base
+            lb, ub = ev.bounds
+            pmf, u, o = pmf.truncate(lb, ub)
+            under[idx] = u
+            over[idx] = o
+            event_pmfs[idx] = pmf
+        self.underflow = under
+        self.overflow = over
         return event_pmfs

@@ -91,3 +91,15 @@ class DiscretePMF:
         overflow = self.probs[idx + 1 :].sum()
         new_probs[-1] += overflow
         return DiscretePMF(new_vals, new_probs)
+
+    def truncate(self, min_value: float, max_value: float) -> tuple["DiscretePMF", float, float]:
+        """Truncate the PMF to ``[min_value, max_value]`` and return under/overflow mass."""
+        under = float(self.probs[self.values < min_value].sum())
+        over = float(self.probs[self.values > max_value].sum())
+        mask = (self.values >= min_value) & (self.values <= max_value)
+        new_vals = self.values[mask]
+        new_probs = self.probs[mask]
+        if new_vals.size == 0:
+            new_vals = np.array([min_value], dtype=float)
+            new_probs = np.array([0.0], dtype=float)
+        return DiscretePMF(new_vals, new_probs), under, over
