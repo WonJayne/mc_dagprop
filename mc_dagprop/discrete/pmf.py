@@ -45,7 +45,7 @@ class DiscretePMF:
         if not np.isclose(self.probs.sum(), 1.0):
             raise ValueError("probabilities must sum to 1.0")
 
-    # Step should be a static property, defined on init. Again, someting that we can validate in a separate method.
+    # Step should be a static property, defined on init. Again, something that we can validate in a separate method.
     @property
     def step(self) -> Second:
         return self.step_size
