@@ -57,6 +57,12 @@ class DiscreteSimulator:
     order: list[int]
 
     def run(self) -> tuple[SimulatedEvent, ...]:
+        """Propagate events through the DAG to compute node PMFs.
+
+        Each node's distribution is derived from its predecessors and the
+        result is returned as a tuple of :class:`SimulatedEvent` objects in
+        original order.
+        """
         n_events = len(self.context.events)
         # NOTE[codex]: We need index-based lookup for predecessors. Using a
         # simple append-only list would break because event indices are not
