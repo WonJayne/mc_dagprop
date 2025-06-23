@@ -3,13 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+
 # Some comments on the code, things to improve or change:
 # TODO: Define a custum type, Second, that is a float, but has a unit of seconds, which we can use in the future.
 # TODO: Define a custom type, Probability, that is a float, but has a unit of probability, which we can use in the future.
 
 # Please use from __future__ import annotations to ensure that the type hints are better readable
 
-@dataclass(frozen=True, slots=True,)
+
+@dataclass(frozen=True, slots=True)
 class DiscretePMF:
     """Simple probability mass function on an equidistant grid."""
 
@@ -22,13 +24,13 @@ class DiscretePMF:
         if not np.isclose(self.probs.sum(), 1.0):
             # FIXME: This is not something we should be doing here, as this is causing behavioral changes.
             # We can raise an error instead
-            self.probs = self.probs / self.probs.sum()
+            object.__setattr__(self, "probs", self.probs / self.probs.sum())
 
         # FIXME Wouldn't it be better to just expect sorted values? I would instead have a validate method,
         #  that checks if the values are sorted. and if the probs are normalized.
         order = np.argsort(self.values)
-        self.values = self.values[order]
-        self.probs = self.probs[order]
+        object.__setattr__(self, "values", self.values[order])
+        object.__setattr__(self, "probs", self.probs[order])
         # merge identical values
 
         # TODO: SAme as above, this is not something we should be doing here.
@@ -36,8 +38,8 @@ class DiscretePMF:
         if len(uniq) != len(self.values):
             agg = np.zeros_like(uniq, dtype=float)
             np.add.at(agg, indices, self.probs)
-            self.values = uniq
-            self.probs = agg
+            object.__setattr__(self, "values", uniq)
+            object.__setattr__(self, "probs", agg)
 
     # Step should be a static property, defined on init. Again, someting that we can validate in a separate method.
     @property

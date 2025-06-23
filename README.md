@@ -170,9 +170,14 @@ Define per-edge probability mass functions and build an `AnalyticContext`:
 ```python
 from mc_dagprop import AnalyticContext, DiscretePMF, DiscreteSimulator, EventTimestamp, SimEvent
 
-events = [SimEvent("A", EventTimestamp(0, 10, 0)), SimEvent("B", EventTimestamp(0, 10, 0))]
+events = (
+    SimEvent("A", EventTimestamp(0, 10, 0)),
+    SimEvent("B", EventTimestamp(0, 10, 0)),
+)
 activities = {(0, 1): (0, DiscretePMF([1.0, 2.0], [0.5, 0.5]))}
-precedence = [(1, [(0, 0)])]
+precedence = (
+    (1, ((0, 0),)),
+)
 ctx = AnalyticContext(
     events=events,
     activities=activities,
