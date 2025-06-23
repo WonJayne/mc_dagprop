@@ -7,22 +7,13 @@ import numpy as np
 from mc_dagprop import EventTimestamp
 from .pmf import DiscretePMF, Probability, Second
 
-# TODO:
-#  General comments: Please avoid using list as return type annotations, as they are mutable and can lead to unexpected
-#  behavior, prefer using tuple or frozenset for immutable collections.
-
 NodeIndex = int
 EdgeIndex = int
 Pred = tuple[NodeIndex, EdgeIndex]
 
-
-# TODO: Make all these dataclasses frozen=True and slots=True -> memory and mutability optimizations
-
-
 @dataclass(frozen=True, slots=True)
 class AnalyticEdge:
     pmf: DiscretePMF
-
 
 @dataclass(frozen=True, slots=True)
 class ScheduledEvent:
@@ -35,17 +26,11 @@ class ScheduledEvent:
         if self.bounds is None:
             object.__setattr__(self, "bounds", (self.timestamp.earliest, self.timestamp.latest))
 
-
 @dataclass(frozen=True, slots=True)
 class SimulatedEvent:
     pmf: DiscretePMF
     underflow: Probability
     overflow: Probability
-
-
-# TODO: we should have a scheduled event and a simulated event, where the scheduled event has a timestamp and bounds,
-#  while the simulated event has then the distribution of the timestamps as well as the over/underflow's
-
 
 @dataclass(frozen=True, slots=True)
 class AnalyticContext:
