@@ -162,6 +162,26 @@ Configurable delay factory (one distribution per `activity_type`):
 - `.durations`:  `NDArray[float]` – per-edge durations (base + extra)  
 - `.cause_event`: `NDArray[int]` – which predecessor caused each event  
 
+## Discrete Simulator
+
+You can propagate discrete delay distributions analytically using `DiscreteSimulator`.
+Define per-edge probability mass functions and build an `AnalyticContext`:
+
+```python
+from mc_dagprop import AnalyticContext, DiscretePMF, DiscreteSimulator, EventTimestamp, SimEvent
+
+events = [SimEvent("A", EventTimestamp(0, 10, 0)), SimEvent("B", EventTimestamp(0, 10, 0))]
+activities = {(0, 1): (0, DiscretePMF([1.0, 2.0], [0.5, 0.5]))}
+precedence = [(1, [(0, 0)])]
+ctx = AnalyticContext(events=events, activities=activities, precedence_list=precedence)
+
+sim = DiscreteSimulator(ctx)
+pmfs = sim.run()
+print(pmfs[1].values, pmfs[1].probs)
+```
+This computes event-time PMFs deterministically without Monte-Carlo sampling.
+
+
 ---
 
 ## Visualization Demo
