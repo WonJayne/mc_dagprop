@@ -201,9 +201,12 @@ The ``step_size`` sets the spacing for all values in the discrete PMFs.
 ``DiscreteSimulator`` invokes ``AnalyticContext.validate()`` at construction
 time and will raise an error when any edge uses a different step.
 Each ``ScheduledEvent`` may specify ``bounds=(lower, upper)`` to clip the
-resulting distribution. The ``run()`` method returns a sequence of
-``SimulatedEvent`` objects which hold the resulting PMF and the under- and
-overflow mass for that event. Events without predecessors are deterministic and
+resulting distribution. Overflow and underflow mass can either be truncated to
+the closest bound or removed entirely. Control this behaviour via the optional
+``underflow_rule`` and ``overflow_rule`` arguments of
+``create_discrete_simulator()``. The ``run()`` method returns a sequence of
+``SimulatedEvent`` objects which hold the resulting PMF and the probability mass
+discarded on either side. Events without predecessors are deterministic and
 their PMFs collapse to a single value at the earliest bound.
 By default the step size is ``1.0`` second and typical delay deviations range
 roughly from ``-180`` s up to ``+1800`` s.

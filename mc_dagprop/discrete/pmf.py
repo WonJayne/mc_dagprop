@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from typing import NewType
 
 import numpy as np
@@ -14,6 +15,20 @@ Second = NewType("Second", float)
 
 # Likewise for probability values.
 Probability = NewType("Probability", float)
+
+# Behaviours for mass outside the supported range.
+class UnderflowRule(Enum):
+    """How to handle probability mass below a lower bound."""
+
+    TRUNCATE = auto()
+    REMOVE = auto()
+
+
+class OverflowRule(Enum):
+    """How to handle probability mass above an upper bound."""
+
+    TRUNCATE = auto()
+    REMOVE = auto()
 
 # Please use from __future__ import annotations to ensure that the type hints are better readable
 
@@ -127,3 +142,55 @@ class DiscretePMF:
         pmf = DiscretePMF(new_vals, new_probs)
         pmf.validate()
         return pmf, under, over
+
+
+def apply_bounds(
+    pmf: DiscretePMF,
+    min_value: Second,
+    max_value: Second,
+    underflow_rule: UnderflowRule = UnderflowRule.TRUNCATE,
+    overflow_rule: OverflowRule = OverflowRule.TRUNCATE,
+) -> tuple[DiscretePMF, Probability, Probability]:
+    """Clip ``pmf`` to ``[min_value, max_value]`` according to the given rules."""
+
+    if min_value > max_value:
+        raise ValueError("min_value must not exceed max_value")
+
+    vals = pmf.values
+    probs = pmf.probs
+
+    under_mask = vals < min_value
+    over_mask = vals > max_value
+    under_mass = Probability(float(probs[under_mask].sum()))
+    over_mass = Probability(float(probs[over_mask].sum()))
+    keep_mask = ~(under_mask | over_mask)
+
+    new_vals = vals[keep_mask]
+    new_probs = probs[keep_mask]
+
+    if underflow_rule is UnderflowRule.TRUNCATE and float(under_mass) > 0.0:
+        if new_vals.size and np.isclose(new_vals[0], min_value):
+            new_probs[0] += float(under_mass)
+        else:
+            new_vals = np.insert(new_vals, 0, min_value)
+            new_probs = np.insert(new_probs, 0, float(under_mass))
+        under_mass = Probability(0.0)
+
+    if overflow_rule is OverflowRule.TRUNCATE and float(over_mass) > 0.0:
+        if new_vals.size and np.isclose(new_vals[-1], max_value):
+            new_probs[-1] += float(over_mass)
+        else:
+            new_vals = np.append(new_vals, max_value)
+            new_probs = np.append(new_probs, float(over_mass))
+        over_mass = Probability(0.0)
+
+    if float(under_mass) > 0.0 or float(over_mass) > 0.0:
+        if new_probs.sum() > 0.0:
+            new_probs = new_probs / new_probs.sum()
+        else:
+            new_vals = np.array([min_value], dtype=float)
+            new_probs = np.array([0.0], dtype=float)
+
+    clipped = DiscretePMF(new_vals, new_probs)
+    clipped.validate()
+    return clipped, under_mass, over_mass
