@@ -63,10 +63,7 @@ class TestSimulator(unittest.TestCase):
     def test_unsorted_precedence_same_result(self):
         unsorted = list(reversed(self.precedence_list))
         ctx_unsorted = SimContext(
-            events=self.events,
-            activities=self.link_map,
-            precedence_list=unsorted,
-            max_delay=10.0,
+            events=self.events, activities=self.link_map, precedence_list=unsorted, max_delay=10.0
         )
 
         gen_a = GenericDelayGenerator()

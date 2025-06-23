@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 import numpy as np
-
 from mc_dagprop import EventTimestamp, SimEvent
 
 from .pmf import DiscretePMF
@@ -40,6 +38,4 @@ class AnalyticContext:
                 ev.bounds = (ev.timestamp.earliest, ev.timestamp.latest)
         for _, edge in self.activities.values():
             if not np.isclose(edge.pmf.step, self.step_size):
-                raise ValueError(
-                    f"edge PMF step {edge.pmf.step} does not match context step size {self.step_size}"
-                )
+                raise ValueError(f"edge PMF step {edge.pmf.step} does not match context step size {self.step_size}")

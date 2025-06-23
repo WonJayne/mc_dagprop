@@ -1,6 +1,6 @@
 import unittest
-import numpy as np
 
+import numpy as np
 from mc_dagprop.discrete.pmf import DiscretePMF
 
 

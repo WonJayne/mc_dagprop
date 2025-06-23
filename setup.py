@@ -1,8 +1,8 @@
 # encoding: utf-8
 # Legacy script, if you want to build without poetry etc..., just bare metal
 import sys
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext

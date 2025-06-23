@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import deque
 
-
 from .context import AnalyticContext
 from .pmf import DiscretePMF
 
