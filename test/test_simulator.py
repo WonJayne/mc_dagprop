@@ -7,7 +7,7 @@ from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimCo
 
 
 class TestSimulator(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.events = [
             SimEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
             SimEvent("1", EventTimestamp(5.0, 100.0, 0.0)),
@@ -172,7 +172,7 @@ class TestSimulator(unittest.TestCase):
 
 
 class LargeScaleTest(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.events = [SimEvent(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(10_000)]
         self.link_map = {(i, i + 1): (i, SimActivity(3.0, 1)) for i in range(9999)}
         self.precedence_list = [(i, [(i - 1, i)]) for i in range(1, 10_000)]
