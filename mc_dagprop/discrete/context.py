@@ -19,23 +19,27 @@ Pred = tuple[NodeIndex, EdgeIndex]
 # TODO: Make all these dataclasses frozen=True and slots=True -> memory and mutability optimizations
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AnalyticEdge:
     pmf: DiscretePMF
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AnalyticEvent:
     id: str
     timestamp: EventTimestamp
     bounds: tuple[float, float] | None = None
+
+    def __post_init__(self) -> None:
+        if self.bounds is None:
+            object.__setattr__(self, "bounds", (self.timestamp.earliest, self.timestamp.latest))
 
 
 # TODO: we should have a scheduled event and a simulated event, where the scheduled event has a timestamp and bounds,
 #  while the simulated event has then the distribution of the timestamps as well as the over/underflow's
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class AnalyticContext:
     events: tuple[AnalyticEvent, ...]
     activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
@@ -56,9 +60,6 @@ class AnalyticContext:
             object.__setattr__(self, "precedence_list", tuple(fixed))
 
     def validate(self) -> None:
-        for ev in self.events:
-            if ev.bounds is None:
-                ev.bounds = (ev.timestamp.earliest, ev.timestamp.latest)
         for _, edge in self.activities.values():
             if not np.isclose(edge.pmf.step, self.step_size):
                 raise ValueError(f"edge PMF step {edge.pmf.step} does not match context step size {self.step_size}")
