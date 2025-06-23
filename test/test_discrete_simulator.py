@@ -1,9 +1,14 @@
 import unittest
 
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 import numpy as np
 from mc_dagprop import (
     AnalyticContext,
-    AnalyticEvent,
+    ScheduledEvent,
+    SimulatedEvent,
     DiscretePMF,
     DiscreteSimulator,
     EventTimestamp,
@@ -19,9 +24,9 @@ from mc_dagprop.discrete.context import AnalyticEdge
 class TestDiscreteSimulator(unittest.TestCase):
     def setUp(self) -> None:
         self.events = (
-            AnalyticEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
-            AnalyticEvent("1", EventTimestamp(0.0, 100.0, 0.0)),
-            AnalyticEvent("2", EventTimestamp(0.0, 100.0, 0.0)),
+            ScheduledEvent(EventTimestamp(0.0, 100.0, 0.0)),
+            ScheduledEvent(EventTimestamp(0.0, 100.0, 0.0)),
+            ScheduledEvent(EventTimestamp(0.0, 100.0, 0.0)),
         )
         self.mc_events = (
             SimEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
@@ -53,8 +58,8 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_compare_to_monte_carlo(self) -> None:
         ds = DiscreteSimulator(self.a_context)
-        pmfs = ds.run()
-        final = pmfs[2]
+        events = ds.run()
+        final = events[2].pmf
         samples = [self.mc_sim.run(seed=i).realized[2] for i in range(2000)]
         counts = np.bincount(np.array(samples, dtype=int))[1:4]
         mc_probs = counts / counts.sum()
@@ -77,9 +82,9 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_bounds_and_overflow(self) -> None:
         events = (
-            AnalyticEvent("0", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 0.0)),
-            AnalyticEvent("1", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.5)),
-            AnalyticEvent("2", EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.8)),
+            ScheduledEvent(EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 0.0)),
+            ScheduledEvent(EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.5)),
+            ScheduledEvent(EventTimestamp(0.0, 100.0, 0.0), bounds=(0.0, 1.8)),
         )
         ctx = AnalyticContext(
             events=events,
@@ -92,18 +97,18 @@ class TestDiscreteSimulator(unittest.TestCase):
             step_size=1.0,
         )
         ds = DiscreteSimulator(ctx)
-        pmfs = ds.run()
+        events = ds.run()
         self.assertAlmostEqual(ds.overflow[1], 0.5, places=6)
         self.assertAlmostEqual(ds.overflow[2], 0.5, places=6)
         self.assertAlmostEqual(sum(ds.overflow), 1.0, places=6)
-        self.assertTrue(np.all(pmfs[1].values <= 1.5))
-        self.assertTrue(np.all(pmfs[2].values <= 1.8))
-        self.assertAlmostEqual(pmfs[2].probs.sum(), 1.0, places=6)
+        self.assertTrue(np.all(events[1].pmf.values <= 1.5))
+        self.assertTrue(np.all(events[2].pmf.values <= 1.8))
+        self.assertAlmostEqual(events[2].pmf.probs.sum(), 1.0, places=6)
 
     def test_large_uniform_network(self) -> None:
         values = np.arange(-180.0, 1800.1, 1.0)
         probs = np.ones_like(values, dtype=float) / len(values)
-        events = tuple(AnalyticEvent(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(5))
+        events = tuple(ScheduledEvent(EventTimestamp(0.0, 2000.0, 0.0)) for _ in range(5))
         precedence = ((1, ((0, 0),)), (2, ((0, 1),)), (3, ((1, 2), (2, 3))), (4, ((2, 4), (3, 5))))
         activities = {
             (0, 1): (0, AnalyticEdge(DiscretePMF(values, probs))),
@@ -117,10 +122,10 @@ class TestDiscreteSimulator(unittest.TestCase):
             events=events, activities=activities, precedence_list=precedence, max_delay=1800.0, step_size=1.0
         )
         ds = DiscreteSimulator(ctx)
-        pmfs = ds.run()
-        self.assertEqual(len(pmfs), 5)
-        for pmf in pmfs[1:]:
-            self.assertAlmostEqual(pmf.step, 1.0, places=6)
+        events = ds.run()
+        self.assertEqual(len(events), 5)
+        for evt in events[1:]:
+            self.assertAlmostEqual(evt.pmf.step, 1.0, places=6)
         self.assertTrue(all(u >= 0.0 for u in ds.underflow))
         self.assertTrue(all(o >= 0.0 for o in ds.overflow))
 

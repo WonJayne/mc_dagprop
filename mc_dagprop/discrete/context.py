@@ -25,10 +25,16 @@ class AnalyticEdge:
 
 
 @dataclass
-class AnalyticEvent:
-    id: str
+class ScheduledEvent:
     timestamp: EventTimestamp
     bounds: tuple[float, float] | None = None
+
+
+@dataclass
+class SimulatedEvent:
+    pmf: DiscretePMF
+    underflow: float
+    overflow: float
 
 
 # TODO: we should have a scheduled event and a simulated event, where the scheduled event has a timestamp and bounds,
@@ -37,7 +43,7 @@ class AnalyticEvent:
 
 @dataclass
 class AnalyticContext:
-    events: tuple[AnalyticEvent, ...]
+    events: tuple[ScheduledEvent, ...]
     activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
     precedence_list: tuple[tuple[NodeIndex, tuple[Pred, ...]], ...]
     max_delay: float = 0.0

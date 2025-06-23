@@ -1,7 +1,13 @@
 from importlib.metadata import version
 
 from ._core import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, SimResult, Simulator
-from .discrete import AnalyticContext, AnalyticEvent, DiscretePMF, DiscreteSimulator
+from .discrete import (
+    AnalyticContext,
+    DiscretePMF,
+    DiscreteSimulator,
+    ScheduledEvent,
+    SimulatedEvent,
+)
 from .utils.inspection import plot_activity_delays, retrieve_absolute_and_relative_delays
 
 __version__ = version("mc-dagprop")
@@ -15,7 +21,8 @@ __all__ = [
     "Simulator",
     "EventTimestamp",
     "DiscretePMF",
-    "AnalyticEvent",
+    "ScheduledEvent",
+    "SimulatedEvent",
     "AnalyticContext",
     "DiscreteSimulator",
     "plot_activity_delays",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from .context import AnalyticContext
+from .context import AnalyticContext, SimulatedEvent
 from .pmf import DiscretePMF
 
 # TODO: Make this a dataclass with frozen, slots etc
@@ -39,13 +39,9 @@ class DiscreteSimulator:
         self._preds_by_target = preds_by_target
         self.order = order
 
-    def run(self) -> tuple[DiscretePMF, ...]:
-        # FIXME: here, I would expect to get a tuple of simulated Events, each with a PMF.
-
+    def run(self) -> tuple[SimulatedEvent, ...]:
         n_events = len(self.context.events)
-        event_pmfs: list[DiscretePMF] = [None] * n_events  # type: ignore
-        under: list[float] = [0.0] * n_events
-        over: list[float] = [0.0] * n_events
+        events: list[SimulatedEvent] = [None] * n_events  # type: ignore
         for idx in self.order:
             ev = self.context.events[idx]
             base = DiscretePMF.delta(ev.timestamp.earliest)
@@ -56,16 +52,12 @@ class DiscreteSimulator:
                 cur = None
                 for src, link in preds:
                     edge_pmf = self.context.activities[(src, idx)][1].pmf
-                    candidate = event_pmfs[src].convolve(edge_pmf)
+                    candidate = events[src].pmf.convolve(edge_pmf)
                     cur = candidate if cur is None else cur.maximum(candidate)
                 pmf = cur if cur is not None else base
             lb, ub = ev.bounds
             pmf, u, o = pmf.truncate(lb, ub)
-            under[idx] = u
-            over[idx] = o
-            event_pmfs[idx] = pmf
-        # FIXME: Over and underflow should be given to the individual events, as this allows the user to
-        #  investigate the propagation of the PMF in more detail.
-        self.underflow = under
-        self.overflow = over
-        return event_pmfs
+            events[idx] = SimulatedEvent(pmf=pmf, underflow=u, overflow=o)
+        self.underflow = [e.underflow for e in events]
+        self.overflow = [e.overflow for e in events]
+        return tuple(events)
