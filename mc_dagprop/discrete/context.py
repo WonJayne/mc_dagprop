@@ -78,9 +78,11 @@ class AnalyticContext:
 
 @unique
 class UnderflowRule(IntEnum):
-    """How to handle probability mass below a lower bound."""
+    """Policy for mass falling below the lower bound.
 
-    # TODO: Explain meaning of each rule better
+    ``TRUNCATE`` assigns it to the bound value, ``REMOVE`` drops it entirely and
+    ``REDISTRIBUTE`` spreads it over the remaining probabilities.
+    """
 
     TRUNCATE = 1
     REMOVE = 2
@@ -89,9 +91,11 @@ class UnderflowRule(IntEnum):
 
 @unique
 class OverflowRule(IntEnum):
-    """How to handle probability mass above an upper bound."""
+    """Policy for mass exceeding the upper bound.
 
-    # TODO: Explain meaning of each rule better
+    ``TRUNCATE`` moves the excess to the bound, ``REMOVE`` discards it and
+    ``REDISTRIBUTE`` allocates it proportionally over the retained range.
+    """
 
     TRUNCATE = 1
     REMOVE = 2

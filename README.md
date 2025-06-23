@@ -204,10 +204,12 @@ different step. All PMF value grids must therefore have constant spacing equal
 to ``step_size`` and start on a multiple of that step. Pass ``validate=False``
 to skip this check if you have already validated the context yourself.
 Each ``ScheduledEvent`` may specify ``bounds=(lower, upper)`` to clip the
-resulting distribution. Overflow and underflow mass can either be truncated to
-the closest bound or removed entirely. Control this behaviour via the optional
-``underflow_rule`` and ``overflow_rule`` arguments of
-``create_discrete_simulator()``. The ``run()`` method returns a sequence of
+resulting distribution. Overflow and underflow mass can be truncated to the
+closest bound, removed or redistributed across the remaining range. Control this
+behaviour via the optional ``underflow_rule`` and ``overflow_rule`` arguments of
+``create_discrete_simulator()``. ``TRUNCATE`` places the mass on the bound,
+``REMOVE`` drops it entirely and ``REDISTRIBUTE`` reweights the other values.
+The ``run()`` method returns a sequence of
 ``SimulatedEvent`` objects which hold the resulting PMF and the probability mass
 discarded on either side. Events without predecessors are deterministic and
 their PMFs collapse to a single value at the earliest bound.
