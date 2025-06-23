@@ -34,6 +34,8 @@ class DiscretePMF:
 
     def validate_alignment(self, step: Second) -> None:
         """Ensure that ``values`` align with ``step`` spacing."""
+        if not np.isclose(self.step, step):
+            raise ValueError(f"PMF step {self.step} does not match expected {step}")
         if step <= 0.0:
             raise ValueError("step must be positive")
 
@@ -66,14 +68,14 @@ class DiscretePMF:
             other_is_delta = len(other.values) == 1
             if other_is_delta:
                 # Both are delta functions, return a delta function at the sum of the values.
-                return DiscretePMF.delta(self.values[0] + other.values[0])
+                return DiscretePMF.delta(self.values[0] + other.values[0], step=self.step)
 
         step = self.step
 
         start = self.values[0] + other.values[0]
         probs = np.convolve(self.probabilities, other.probabilities)
         values = start + step * np.arange(len(probs))
-        return DiscretePMF(values, probs, step=step)
+        return DiscretePMF(values, probs, step=self.step)
 
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
         """Return ``max(X, Y)`` for two independent PMFs.
@@ -82,7 +84,7 @@ class DiscretePMF:
         distributions when an event has multiple predecessors.
         """
         if len(self.values) == 1 and len(other.values) == 1:
-            return DiscretePMF.delta(max(self.values[0], other.values[0]))
+            return DiscretePMF.delta(max(self.values[0], other.values[0]), step=self.step)
 
         step = float(self.step)
 
