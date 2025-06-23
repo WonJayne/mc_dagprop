@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 import argparse
+from collections.abc import Iterable, Mapping
 
 import plotly.graph_objects as go
 from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
 
 
-def simulate_and_collect(dist_name, params, seeds, base_duration=60.0) -> list[float]:
+def simulate_and_collect(
+    dist_name: str,
+    params: Mapping[str, float],
+    seeds: Iterable[int],
+    base_duration: float = 60.0,
+) -> list[float]:
     """
     Run simulations for a single distribution+parameter set and return the
     realized timestamp of the second (delayed) node.
