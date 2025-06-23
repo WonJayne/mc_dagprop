@@ -229,5 +229,23 @@ def test_run_returns_simulated_event_objects() -> None:
     assert all(isinstance(ev, SimulatedEvent) for ev in result)
 
 
+def test_clipping_tolerates_rounding_errors() -> None:
+    vals = np.array([-1.0, 0.0, 1.0])
+    probs = np.array([0.25, 0.25, 0.5 + 1e-12])
+    pmf = DiscretePMF(vals, probs, step=1.0)
+    ctx = AnalyticContext(
+        events=(ScheduledEvent("e0", EventTimestamp(0.0, 1.0, 0.0)),),
+        activities={},
+        precedence_list=(),
+        step_size=1.0,
+        underflow_rule=UnderflowRule.TRUNCATE,
+        overflow_rule=OverflowRule.TRUNCATE,
+    )
+    sim = create_discrete_simulator(ctx, validate=False)
+    res = sim._convert_to_simulated_event(pmf, 0.0, 1.0)
+    total = res.pmf.probabilities.sum() + float(res.underflow) + float(res.overflow)
+    assert np.isclose(total, 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

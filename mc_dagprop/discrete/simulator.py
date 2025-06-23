@@ -181,8 +181,8 @@ class DiscreteSimulator:
         # FIXME: This should be a validation method, outside of the apply_bounds method.
         clipped.validate()
 
-        # TODO: Replace this with a method that can cope with some numerical errors. (np.isclose or similar)
-        assert (
-            sum(clipped.probabilities) + float(under_mass) + float(over_mass) <= 1.0
+        total_mass = float(clipped.probabilities.sum() + under_mass + over_mass)
+        assert total_mass <= 1.0 or np.isclose(
+            total_mass, 1.0
         ), "Total probability mass exceeds 1.0 after clipping"
         return SimulatedEvent(clipped, under_mass, over_mass)
