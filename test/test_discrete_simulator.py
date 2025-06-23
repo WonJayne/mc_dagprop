@@ -94,6 +94,18 @@ class TestDiscreteSimulator(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_discrete_simulator(ctx)
 
+    def test_non_positive_step_size(self) -> None:
+        ctx = AnalyticContext(
+            events=self.events,
+            activities={},
+            precedence_list=(),
+            step_size=0.0,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
+        )
+        with self.assertRaises(ValueError):
+            create_discrete_simulator(ctx)
+
     def test_skip_validation(self) -> None:
         act0 = AnalyticEdge(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))
         ctx = AnalyticContext(
