@@ -18,6 +18,7 @@ Pred = tuple[NodeIndex, EdgeIndex]
 
 # TODO: Make all these dataclasses frozen=True and slots=True -> memory and mutability optimizations
 
+
 @dataclass
 class AnalyticEdge:
     pmf: DiscretePMF
@@ -33,13 +34,26 @@ class AnalyticEvent:
 # TODO: we should have a scheduled event and a simulated event, where the scheduled event has a timestamp and bounds,
 #  while the simulated event has then the distribution of the timestamps as well as the over/underflow's
 
+
 @dataclass
 class AnalyticContext:
-    events: list[AnalyticEvent]
+    events: tuple[AnalyticEvent, ...]
     activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
-    precedence_list: list[tuple[NodeIndex, list[Pred]]]
+    precedence_list: tuple[tuple[NodeIndex, tuple[Pred, ...]], ...]
     max_delay: float = 0.0
     step_size: float = 0.0
+
+    def __post_init__(self) -> None:
+        # Accept sequences in the constructor but store tuples internally to
+        # avoid accidental mutation of the context after creation.
+        if not isinstance(self.events, tuple):
+            object.__setattr__(self, "events", tuple(self.events))
+        if not isinstance(self.precedence_list, tuple):
+            fixed = []
+            for target, preds in self.precedence_list:  # type: ignore[attr-defined]
+                preds_tuple = tuple(preds)
+                fixed.append((target, preds_tuple))
+            object.__setattr__(self, "precedence_list", tuple(fixed))
 
     def validate(self) -> None:
         for ev in self.events:
