@@ -1,47 +1,59 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .context import AnalyticContext, Pred, SimulatedEvent
 from .pmf import DiscretePMF, Probability
+
+
+def build_topology(
+    context: AnalyticContext,
+) -> tuple[list[tuple[Pred, ...] | None], list[int]]:
+    """Return predecessor mapping and topological order for ``context``."""
+
+    event_count = len(context.events)
+    adjacency: list[list[int]] = [[] for _ in range(event_count)]
+    indegree = [0] * event_count
+    preds_by_target: list[tuple[Pred, ...] | None] = [None] * event_count
+
+    for target, preds in context.precedence_list:
+        preds_by_target[target] = preds
+        indegree[target] = len(preds)
+        for src, _ in preds:
+            adjacency[src].append(target)
+
+    order: list[int] = []
+    q: deque[int] = deque(i for i, deg in enumerate(indegree) if deg == 0)
+
+    while q:
+        node = q.popleft()
+        order.append(node)
+        for dst in adjacency[node]:
+            indegree[dst] -= 1
+            if indegree[dst] == 0:
+                q.append(dst)
+
+    if len(order) != event_count:
+        raise RuntimeError("Invalid DAG: cycle detected")
+
+    return preds_by_target, order
+
+
+def create_discrete_simulator(context: AnalyticContext) -> "DiscreteSimulator":
+    """Return a :class:`DiscreteSimulator` with topology built for ``context``."""
+
+    context.validate()
+    preds, order = build_topology(context)
+    return DiscreteSimulator(context=context, _preds_by_target=preds, order=order)
 
 @dataclass(frozen=True, slots=True)
 class DiscreteSimulator:
     """Propagate discrete PMFs through a DAG."""
 
     context: AnalyticContext
-    _preds_by_target: list[tuple[Pred, ...] | None] = field(init=False, repr=False)
-    order: list[int] = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        self.context.validate()
-        self._build_topology()
-
-    def _build_topology(self) -> None:
-        # TODO: Move this on a factory or a separate method, that reutrns a DiscreteSimulator
-        event_count = len(self.context.events)
-        adjacency = [[] for _ in range(event_count)]
-        indegree = [0] * event_count
-        preds_by_target = [None] * event_count
-        for target, predecessor in self.context.precedence_list:
-            preds_by_target[target] = predecessor
-            indegree[target] = len(predecessor)
-            for src, _ in predecessor:
-                adjacency[src].append(target)
-        order: list[int] = []
-        q = deque(i for i, deg in enumerate(indegree) if deg == 0)
-        while q:
-            n = q.popleft()
-            order.append(n)
-            for dst in adjacency[n]:
-                indegree[dst] -= 1
-                if indegree[dst] == 0:
-                    q.append(dst)
-        if len(order) != event_count:
-            raise RuntimeError("Invalid DAG: cycle detected")
-        object.__setattr__(self, "_preds_by_target", preds_by_target)
-        object.__setattr__(self, "order", order)
+    _preds_by_target: list[tuple[Pred, ...] | None]
+    order: list[int]
 
     def run(self) -> tuple[SimulatedEvent, ...]:
         n_events = len(self.context.events)
