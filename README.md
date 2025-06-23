@@ -133,9 +133,9 @@ Represents an edge in the DAG:
 
 Container for your DAG:
 
-- `events`:          `List[SimEvent]`
-- `activities`:      `Dict[(src_idx, dst_idx), (link_idx, SimActivity)]`
-- `precedence_list`: `List[(target_idx, [(pred_idx, link_idx), …])]`
+- `events`:          `list[SimEvent]`
+- `activities`:      `dict[(src_idx, dst_idx), (link_idx, SimActivity)]`
+- `precedence_list`: `list[(target_idx, [(pred_idx, link_idx), …])]`
 - `max_delay`:       overall cap on delay propagation
   - Can be given in any order. `Simulator` will sort topologically and raise
     a `RuntimeError` if cycles are detected.
@@ -154,7 +154,7 @@ Configurable delay factory (one distribution per `activity_type`):
 ### `Simulator(context: SimContext, generator: GenericDelayGenerator)`
 
 - `.run(seed: int) → SimResult`  
-- `.run_many(seeds: Sequence[int]) → List[SimResult]`  
+- `.run_many(seeds: Sequence[int]) → list[SimResult]`  
 
 ### `SimResult`
 
