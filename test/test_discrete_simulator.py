@@ -135,13 +135,18 @@ class TestDiscreteSimulator(unittest.TestCase):
             ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
             ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0), bounds=(0.0, 1.0)),
         )
-        edge = AnalyticEdge(DiscretePMF(np.array([-1.0, 2.0]), np.array([0.5, 0.5])))
+        edge = AnalyticEdge(
+            DiscretePMF(
+                np.array([-1.0, 0.0, 1.0, 2.0]),
+                np.array([0.5, 0.0, 0.0, 0.5]),
+            )
+        )
         ctx = AnalyticContext(
             events=events,
             activities={(0, 1): (0, edge)},
             precedence_list=((1, ((0, 0),)),),
             max_delay=5.0,
-            step_size=3.0,
+            step_size=1.0,
         )
 
         ds_default = create_discrete_simulator(ctx)
@@ -150,13 +155,12 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertAlmostEqual(res_default.overflow, 0.0, places=6)
         self.assertTrue(np.allclose(res_default.pmf.values, [0.0, 1.0]))
 
-        ds_remove = create_discrete_simulator(
-            ctx, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.REMOVE
-        )
-        res_remove = ds_remove.run()[1]
-        self.assertAlmostEqual(res_remove.underflow, 0.5, places=6)
-        self.assertAlmostEqual(res_remove.overflow, 0.5, places=6)
-        self.assertAlmostEqual(res_remove.pmf.probs.sum(), 0.0, places=6)
+        with self.assertRaises(ValueError):
+            create_discrete_simulator(
+                ctx,
+                underflow_rule=UnderflowRule.REMOVE,
+                overflow_rule=OverflowRule.REMOVE,
+            ).run()
 
         ds_mixed1 = create_discrete_simulator(
             ctx, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.TRUNCATE
@@ -164,7 +168,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         res_mixed1 = ds_mixed1.run()[1]
         self.assertAlmostEqual(res_mixed1.underflow, 0.5, places=6)
         self.assertAlmostEqual(res_mixed1.overflow, 0.0, places=6)
-        self.assertTrue(np.allclose(res_mixed1.pmf.values, [1.0]))
+        self.assertTrue(np.allclose(res_mixed1.pmf.values, [0.0, 1.0]))
 
         ds_mixed2 = create_discrete_simulator(
             ctx, underflow_rule=UnderflowRule.TRUNCATE, overflow_rule=OverflowRule.REMOVE
@@ -172,7 +176,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         res_mixed2 = ds_mixed2.run()[1]
         self.assertAlmostEqual(res_mixed2.underflow, 0.0, places=6)
         self.assertAlmostEqual(res_mixed2.overflow, 0.5, places=6)
-        self.assertTrue(np.allclose(res_mixed2.pmf.values, [0.0]))
+        self.assertTrue(np.allclose(res_mixed2.pmf.values, [0.0, 1.0]))
 
     def test_large_uniform_network(self) -> None:
         values = np.arange(-180.0, 1800.1, 1.0)

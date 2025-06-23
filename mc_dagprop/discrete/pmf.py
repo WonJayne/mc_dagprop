@@ -16,6 +16,7 @@ Second = NewType("Second", float)
 # Likewise for probability values.
 Probability = NewType("Probability", float)
 
+
 # Behaviours for mass outside the supported range.
 class UnderflowRule(Enum):
     """How to handle probability mass below a lower bound."""
@@ -29,6 +30,7 @@ class OverflowRule(Enum):
 
     TRUNCATE = auto()
     REMOVE = auto()
+
 
 # Please use from __future__ import annotations to ensure that the type hints are better readable
 
@@ -100,7 +102,10 @@ class DiscretePMF:
         # fallback: pairwise addition
         vals = self.values[:, None] + other.values[None, :]
         probs = self.probs[:, None] * other.probs[None, :]
-        return DiscretePMF(vals.ravel(), probs.ravel())
+        flat_vals = vals.ravel()
+        flat_probs = probs.ravel()
+        order = np.argsort(flat_vals)
+        return DiscretePMF(flat_vals[order], flat_probs[order])
 
     def cdf(self) -> np.ndarray:
         return np.cumsum(self.probs)
@@ -110,20 +115,62 @@ class DiscretePMF:
         return DiscretePMF(self.values.copy(), probs)
 
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
-        # compute via CDFs: F_max(x) = F1(x) * F2(x)
-        all_vals = np.union1d(self.values, other.values)
-        cdf1 = np.interp(all_vals, self.values, self.cdf(), left=0.0, right=1.0)
-        cdf2 = np.interp(all_vals, other.values, other.cdf(), left=0.0, right=1.0)
-        cdf_max = cdf1 * cdf2
-        return DiscretePMF(all_vals, np.diff(np.concatenate([[0.0], cdf_max])))
+        """Return the distribution of ``max(X, Y)`` for two independent PMFs."""
+        if len(self.values) == 1 and len(other.values) == 1:
+            return DiscretePMF.delta(max(self.values[0], other.values[0]))
+
+        step = float(self.step)
+        if step <= 0.0 or not np.isclose(step, other.step):
+            raise ValueError("PMFs must share a positive step size")
+        if not np.isclose((self.values[0] - other.values[0]) % step, 0.0):
+            raise ValueError("PMF grids are not aligned")
+
+        min_start = min(self.values[0], other.values[0])
+        max_end = max(self.values[-1], other.values[-1])
+        grid = np.arange(min_start, max_end + step, step)
+
+        offset_self = int(round((self.values[0] - min_start) / step))
+        offset_other = int(round((other.values[0] - min_start) / step))
+
+        pmf_self = np.zeros(len(grid))
+        pmf_other = np.zeros(len(grid))
+        pmf_self[offset_self : offset_self + len(self.probs)] = self.probs
+        pmf_other[offset_other : offset_other + len(other.probs)] = other.probs
+
+        cdf_self = np.cumsum(pmf_self)
+        cdf_other = np.cumsum(pmf_other)
+        cdf_max = cdf_self * cdf_other
+        probs = np.diff(np.concatenate(([0.0], cdf_max)))
+        return DiscretePMF(grid, probs)
 
     def minimum(self, other: "DiscretePMF") -> "DiscretePMF":
-        # F_min(x) = 1 - (1-F1(x))*(1-F2(x))
-        all_vals = np.union1d(self.values, other.values)
-        cdf1 = np.interp(all_vals, self.values, self.cdf(), left=0.0, right=1.0)
-        cdf2 = np.interp(all_vals, other.values, other.cdf(), left=0.0, right=1.0)
-        cdf_min = 1.0 - (1.0 - cdf1) * (1.0 - cdf2)
-        return DiscretePMF(all_vals, np.diff(np.concatenate([[0.0], cdf_min])))
+        """Return the distribution of ``min(X, Y)`` for two independent PMFs."""
+        if len(self.values) == 1 and len(other.values) == 1:
+            return DiscretePMF.delta(min(self.values[0], other.values[0]))
+
+        step = float(self.step)
+        if step <= 0.0 or not np.isclose(step, other.step):
+            raise ValueError("PMFs must share a positive step size")
+        if not np.isclose((self.values[0] - other.values[0]) % step, 0.0):
+            raise ValueError("PMF grids are not aligned")
+
+        min_start = min(self.values[0], other.values[0])
+        max_end = max(self.values[-1], other.values[-1])
+        grid = np.arange(min_start, max_end + step, step)
+
+        offset_self = int(round((self.values[0] - min_start) / step))
+        offset_other = int(round((other.values[0] - min_start) / step))
+
+        pmf_self = np.zeros(len(grid))
+        pmf_other = np.zeros(len(grid))
+        pmf_self[offset_self : offset_self + len(self.probs)] = self.probs
+        pmf_other[offset_other : offset_other + len(other.probs)] = other.probs
+
+        cdf_self = np.cumsum(pmf_self)
+        cdf_other = np.cumsum(pmf_other)
+        cdf_min = 1.0 - (1.0 - cdf_self) * (1.0 - cdf_other)
+        probs = np.diff(np.concatenate(([0.0], cdf_min)))
+        return DiscretePMF(grid, probs)
 
     def truncate_right(self, max_value: Second) -> "DiscretePMF":
         if max_value >= self.values[-1]:
