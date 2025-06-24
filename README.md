@@ -127,7 +127,7 @@ associated data structures for running Monte Carlo experiments.
 ### Full-distribution propagator (`mc_dagprop.analytic`)
 
 Python implementation that propagates discrete probability mass functions deterministically. It
-exposes the `AnalyticPropagator`, `DiscreteSimulator` and helper classes.
+exposes the `AnalyticPropagator` and helper classes.
 
 ### Shared components
 

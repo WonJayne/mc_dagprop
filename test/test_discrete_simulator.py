@@ -1,11 +1,7 @@
-import os
-import sys
 import unittest
 from dataclasses import replace
 
 import numpy as np
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from mc_dagprop import (
     Activity,
     AnalyticContext,
@@ -15,7 +11,7 @@ from mc_dagprop import (
     EventTimestamp,
     GenericDelayGenerator,
     Simulator,
-    create_discrete_simulator,
+    create_analytic_propagator,
 )
 from mc_dagprop.analytic import OverflowRule, UnderflowRule
 from mc_dagprop.analytic._context import AnalyticActivity, SimulatedEvent
@@ -61,7 +57,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.mc_sim = Simulator(self.mc_context, gen)
 
     def test_compare_to_monte_carlo(self) -> None:
-        ds = create_discrete_simulator(self.a_context)
+        ds = create_analytic_propagator(self.a_context)
         events = ds.run()
         self.assertTrue(all(isinstance(ev, SimulatedEvent) for ev in events))
         final = events[2].pmf
@@ -73,7 +69,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(np.allclose(mc_probs, final.probabilities, atol=0.05))
 
     def test_event_without_predecessor(self) -> None:
-        ds = create_discrete_simulator(self.a_context)
+        ds = create_analytic_propagator(self.a_context)
         events = ds.run()
         first = events[0].pmf
         earliest = self.events[0].timestamp.earliest
@@ -94,7 +90,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
-            create_discrete_simulator(ctx)
+            create_analytic_propagator(ctx)
 
     def test_non_positive_step_size(self) -> None:
         ctx = AnalyticContext(
@@ -106,7 +102,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
-            create_discrete_simulator(ctx)
+            create_analytic_propagator(ctx)
 
     def test_skip_validation(self) -> None:
         act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))
@@ -120,7 +116,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         )
 
         # Should not raise when validation is disabled
-        sim = create_discrete_simulator(ctx, validate=False)
+        sim = create_analytic_propagator(ctx, validate=False)
         result = sim.run()
         self.assertEqual(len(result), 3)
 
@@ -135,7 +131,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
-            create_discrete_simulator(ctx)
+            create_analytic_propagator(ctx)
 
     def test_bounds_and_overflow(self) -> None:
         events = (
@@ -154,7 +150,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
-        ds = create_discrete_simulator(ctx)
+        ds = create_analytic_propagator(ctx)
         events_res = ds.run()
         self.assertTrue(all(isinstance(ev, SimulatedEvent) for ev in events_res))
         self.assertAlmostEqual(events_res[1].overflow, 0.0, places=6)
@@ -166,7 +162,9 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_rule_combinations(self) -> None:
         events = (Event("0", EventTimestamp(0.0, 10.0, 0.0)), Event("1", EventTimestamp(0.0, 1.0, 0.0)))
-        edge = AnalyticActivity(0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1.0))
+        edge = AnalyticActivity(
+            0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1.0)
+        )
         ctx = AnalyticContext(
             events=events,
             activities={(0, 1): (0, edge)},
@@ -176,7 +174,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             overflow_rule=OverflowRule.TRUNCATE,
         )
 
-        ds_default = create_discrete_simulator(ctx)
+        ds_default = create_analytic_propagator(ctx)
         res_default = ds_default.run()[1]
         self.assertAlmostEqual(res_default.underflow, 0.0, places=6)
         self.assertAlmostEqual(res_default.overflow, 0.0, places=6)
@@ -190,17 +188,17 @@ class TestDiscreteSimulator(unittest.TestCase):
             underflow_rule=UnderflowRule.REMOVE,
             overflow_rule=OverflowRule.REMOVE,
         )
-        create_discrete_simulator(ctx_remove_both).run()
+        create_analytic_propagator(ctx_remove_both).run()
 
         ctx_remove_under = replace(ctx, underflow_rule=UnderflowRule.REMOVE)
-        ds_mixed1 = create_discrete_simulator(ctx_remove_under)
+        ds_mixed1 = create_analytic_propagator(ctx_remove_under)
         res_mixed1 = ds_mixed1.run()[1]
         self.assertAlmostEqual(res_mixed1.underflow, 0.5, places=6)
         self.assertAlmostEqual(res_mixed1.overflow, 0.0, places=6)
         self.assertTrue(np.allclose(res_mixed1.pmf.values, [0.0, 1.0]))
 
         ctx_remove_over = replace(ctx, overflow_rule=OverflowRule.REMOVE)
-        ds_mixed2 = create_discrete_simulator(ctx_remove_over)
+        ds_mixed2 = create_analytic_propagator(ctx_remove_over)
         res_mixed2 = ds_mixed2.run()[1]
         self.assertAlmostEqual(res_mixed2.underflow, 0.0, places=6)
         self.assertAlmostEqual(res_mixed2.overflow, 0.5, places=6)
@@ -227,7 +225,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
-        ds = create_discrete_simulator(ctx)
+        ds = create_analytic_propagator(ctx)
         events_res = ds.run()
         self.assertEqual(len(events_res), 5)
         for e in events_res[1:]:
@@ -246,7 +244,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
-            create_discrete_simulator(ctx)
+            create_analytic_propagator(ctx)
 
     def test_cycle_detection(self) -> None:
         events = (Event("0", EventTimestamp(0.0, 10.0, 0.0)), Event("1", EventTimestamp(0.0, 10.0, 0.0)))
@@ -260,12 +258,14 @@ class TestDiscreteSimulator(unittest.TestCase):
             overflow_rule=OverflowRule.TRUNCATE,
         )
         with self.assertRaises(ValueError):
-            create_discrete_simulator(ctx)
+            create_analytic_propagator(ctx)
 
 
 def test_run_returns_simulated_event_objects() -> None:
     events = (Event("0", EventTimestamp(0.0, 10.0, 0.0)), Event("1", EventTimestamp(0.0, 10.0, 0.0)))
-    edge = AnalyticActivity(0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1.0))
+    edge = AnalyticActivity(
+        0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1.0)
+    )
     ctx = AnalyticContext(
         events=events,
         activities={(0, 1): (0, edge)},
@@ -275,7 +275,7 @@ def test_run_returns_simulated_event_objects() -> None:
         overflow_rule=OverflowRule.TRUNCATE,
     )
 
-    sim = create_discrete_simulator(ctx)
+    sim = create_analytic_propagator(ctx)
     result = sim.run()
     assert all(isinstance(ev, SimulatedEvent) for ev in result)
 
@@ -292,7 +292,7 @@ def test_clipping_tolerates_rounding_errors() -> None:
         underflow_rule=UnderflowRule.TRUNCATE,
         overflow_rule=OverflowRule.TRUNCATE,
     )
-    sim = create_discrete_simulator(ctx, validate=False)
+    sim = create_analytic_propagator(ctx, validate=False)
     res = sim._convert_to_simulated_event(pmf, 0.0, 1.0)
     total = res.pmf.probabilities.sum() + float(res.underflow) + float(res.overflow)
     assert np.isclose(total, 1.0)

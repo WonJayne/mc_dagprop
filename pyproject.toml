@@ -158,4 +158,5 @@ overgeneral-exceptions = "Exception"
 
 [tool.setuptools.packages.find]
 include = ["mc_dagprop*"]
+where = ["src"]
 

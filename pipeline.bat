@@ -9,10 +9,6 @@ del /q build\*.*
 
 call poetry build || exit /b
 
-for /d %%d in (build\lib.*) do (
-    copy "%%d\mc_dagprop\monte_carlo\*_core*.so" mc_dagprop\monte_carlo\ >nul
-)
-
 for %%f in (dist\*.whl) do (
     call pip install %%f --force-reinstall || exit /b
 )
