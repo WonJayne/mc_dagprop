@@ -105,6 +105,32 @@ print("Causal predecessors:", result.cause_event)
 
 ---
 
+## Architecture
+
+### Monte Carlo engine (`mc_dagprop.monte_carlo`)
+
+Compiled extension wrapping a C++ core. Provides the `Simulator`, `GenericDelayGenerator` and
+associated data structures for running Monte Carlo experiments.
+
+### Full-distribution propagator (`mc_dagprop.analytic`)
+
+Python implementation that propagates discrete probability mass functions deterministically. It
+exposes the `AnalyticPropagator`, `DiscreteSimulator` and helper classes.
+
+### Shared components
+
+- `mc_dagprop.core` – basic dataclasses like `Event`, `EventTimestamp`, `Activity` and `DagContext`.
+- `mc_dagprop.types` – typed aliases for seconds, indices and identifiers.
+- `mc_dagprop.utils` – plotting and inspection utilities.
+
+Install the package as **mc-dagprop** but import modules from the `mc_dagprop` namespace, e.g.:
+
+```python
+from mc_dagprop.monte_carlo import Simulator
+```
+
+---
+
 ## API Reference
 
 ### `EventTimestamp(earliest: float, latest: float, actual: float)`
