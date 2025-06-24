@@ -1,4 +1,4 @@
-# mc_dagprop/_core.pyi
+# mc_dagprop/monte_carlo/_core.pyi
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from mc_dagprop.types import ActivityIndex, ActivityType, EventId, EventIndex, Second
 from mc_dagprop.core import Activity as CoreActivity, DagContext as CoreDagContext, Event as CoreEvent, EventTimestamp
