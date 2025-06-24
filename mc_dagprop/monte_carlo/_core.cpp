@@ -360,7 +360,8 @@ PYBIND11_MODULE(_core, m) {
     m.doc() = "Core Monte-Carlo DAG-propagation simulator";
 
     // EventTimestamp
-    py::class_<EventTimestamp>(m, "EventTimestamp")
+    py::class_<EventTimestamp> ts_cls(m, "EventTimestamp");
+    ts_cls
         .def(py::init<double, double, double>(), py::arg("earliest"), py::arg("latest"), py::arg("actual"),
              "Create an event timestamp (earliest, latest, actual).")
         .def_readwrite("earliest", &EventTimestamp::earliest, "Earliest bound")
@@ -368,14 +369,16 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("actual", &EventTimestamp::actual, "Scheduled time");
 
     // Event
-    py::class_<Event>(m, "Event")
+    py::class_<Event> event_cls(m, "Event");
+    event_cls
         .def(py::init<std::string, EventTimestamp>(), py::arg("event_id"), py::arg("timestamp"),
              "An event node with its ID and timestamp")
         .def_readwrite("event_id", &Event::event_id, "Node identifier")
         .def_readwrite("timestamp", &Event::ts, "Event timing info");
 
     // Activity
-    py::class_<Activity>(m, "Activity")
+    py::class_<Activity> activity_cls(m, "Activity");
+    activity_cls
         .def(
             py::init<ActivityIndex, Second, ActivityType>(),
              py::arg("idx"),
@@ -387,7 +390,8 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("activity_type", &Activity::activity_type, "Type ID for delay dist.");
 
     // DagContext
-    py::class_<DagContext>(m, "DagContext")
+    py::class_<DagContext> ctx_cls(m, "DagContext");
+    ctx_cls
         .def(py::init<vector<Event>, unordered_map<pair<EventIndex, EventIndex>, Activity>,
                       vector<pair<EventIndex, Preds>>, double>(),
              py::arg("events"), py::arg("activities"), py::arg("precedence_list"), py::arg("max_delay"),
@@ -396,6 +400,51 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("activities", &DagContext::activity_map)
         .def_readwrite("precedence_list", &DagContext::precedence_list)
         .def_readwrite("max_delay", &DagContext::max_delay);
+
+    // Turn core structs into frozen dataclasses
+    py::object dataclass_fn = py::module_::import("dataclasses").attr("dataclass");
+    py::dict dc_opts;
+    dc_opts["frozen"] = true;
+    dc_opts["slots"] = true;
+    dc_opts["init"] = false;
+    py::object dataclass = dataclass_fn(**dc_opts);
+
+    py::module types_mod = py::module_::import("mc_dagprop.types");
+    py::object Second = types_mod.attr("Second");
+    py::object py_EventId = types_mod.attr("EventId");
+    py::object py_ActivityIndex = types_mod.attr("ActivityIndex");
+    py::object py_ActivityType = types_mod.attr("ActivityType");
+
+    py::dict ts_ann;
+    ts_ann["earliest"] = Second;
+    ts_ann["latest"] = Second;
+    ts_ann["actual"] = Second;
+    ts_cls.attr("__annotations__") = ts_ann;
+    dataclass(ts_cls);
+
+    py::dict ev_ann;
+    ev_ann["event_id"] = py_EventId;
+    ev_ann["timestamp"] = ts_cls;
+    event_cls.attr("__annotations__") = ev_ann;
+    dataclass(event_cls);
+
+    py::dict act_ann;
+    act_ann["idx"] = py_ActivityIndex;
+    act_ann["minimal_duration"] = Second;
+    act_ann["activity_type"] = py_ActivityType;
+    activity_cls.attr("__annotations__") = act_ann;
+    dataclass(activity_cls);
+
+    py::object typing = py::module_::import("typing");
+    py::object Sequence = typing.attr("Sequence");
+    py::object Mapping = typing.attr("Mapping");
+    py::dict ctx_ann;
+    ctx_ann["events"] = Sequence;
+    ctx_ann["activities"] = Mapping;
+    ctx_ann["precedence_list"] = Sequence;
+    ctx_ann["max_delay"] = Second;
+    ctx_cls.attr("__annotations__") = ctx_ann;
+    dataclass(ctx_cls);
 
     // SimResult // SimResult → return NumPy arrays instead of lists
     py::class_<SimResult>(m, "SimResult", py::buffer_protocol())
