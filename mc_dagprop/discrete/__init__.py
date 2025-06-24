@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from typing import NewType
-
-Second = NewType("Second", float)
-ProbabilityMass = NewType("ProbabilityMass", float)
-NodeIndex = NewType("NodeIndex", int)
-EdgeIndex = NewType("EdgeIndex", int)
+from mc_dagprop.types import EdgeIndex, NodeIndex, ProbabilityMass, Second
 
 from .context import AnalyticContext, ScheduledEvent, SimulatedEvent, UnderflowRule, OverflowRule
 from .pmf import DiscretePMF

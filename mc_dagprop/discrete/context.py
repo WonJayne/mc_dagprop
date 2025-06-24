@@ -6,7 +6,7 @@ from enum import unique, IntEnum
 import numpy as np
 
 from mc_dagprop import EventTimestamp
-from . import Second, ProbabilityMass, NodeIndex, EdgeIndex
+from mc_dagprop.types import EdgeIndex, NodeIndex, ProbabilityMass, Second
 from .pmf import DiscretePMF
 
 PredecessorTuple = tuple[NodeIndex, EdgeIndex]

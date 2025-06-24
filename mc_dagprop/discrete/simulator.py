@@ -5,7 +5,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import ProbabilityMass, Second, UnderflowRule, OverflowRule, NodeIndex, EdgeIndex
+from mc_dagprop.types import EdgeIndex, NodeIndex, ProbabilityMass, Second
+from . import OverflowRule, UnderflowRule
 from .context import AnalyticContext, PredecessorTuple, SimulatedEvent, validate_context
 from .pmf import DiscretePMF
 
