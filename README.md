@@ -261,10 +261,13 @@ roughly from ``-180`` s up to ``+1800`` s.
 
 ```bash
 pip install mc-dagprop[plot]
-python -m mc_dagprop.utils.demonstration
+python -m mc_dagprop.demo.distribution
 ```
 
 Displays histograms of realized times and delays.
+
+Additional examples are available via `python -m mc_dagprop.demo.analytic` and
+`python -m mc_dagprop.demo.monte_carlo`.
 
 ---
 

@@ -17,7 +17,7 @@ for %%f in (dist\*.whl) do (
     call pip install %%f --force-reinstall || exit /b
 )
 
-call python mc_dagprop\utils\demonstration.py || exit /b
+call python -m mc_dagprop.demo.distribution || exit /b
 
 cd test
 python -m unittest discover -s . -p "test_*.py" || exit /b

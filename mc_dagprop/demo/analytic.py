@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from example._shared import build_example_context
-from mc_dagprop import create_discrete_simulator
+from ._shared import ExampleConfig, build_example_context
+from .. import create_discrete_simulator
 
 
 def main() -> None:
-    ctx = build_example_context()
+    """Run the analytic propagation demonstration."""
+
+    ctx = build_example_context(ExampleConfig())
     sim = create_discrete_simulator(ctx)
     results = sim.run()
 
