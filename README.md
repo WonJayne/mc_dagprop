@@ -4,12 +4,22 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/mc_dagprop.svg)](https://pypi.org/project/mc_dagprop/)  
 [![License](https://img.shields.io/pypi/l/mc_dagprop.svg)](https://github.com/WonJayne/mc_dagprop/blob/main/LICENSE)
 
-**mc_dagprop** is a fast, Monte Carlo–style propagation simulator for directed acyclic graphs (DAGs),  
-written in C++ with Python bindings via **pybind11**. It allows you to model timing networks  
-(timetables, precedence graphs, etc.) and inject user-defined delay distributions on edges.
+**mc_dagprop** is a fast, Monte Carlo–style propagation simulator for directed
+acyclic graphs (DAGs), written in C++ with Python bindings via **pybind11**. It
+allows you to model timing networks (timetables, precedence graphs, etc.) and
+inject user-defined delay distributions on edges.
 
-Under the hood, we leverage the high-performance [utl::random module](https://github.com/DmitriBogdanov/UTL/blob/master/docs/module_random.md)  
-for all pseudo-random number generation—offering better speed and quality than the standard library.
+Under the hood, we leverage the high-performance
+[utl::random module](https://github.com/DmitriBogdanov/UTL/blob/master/docs/module_random.md)
+for all pseudo-random number generation—offering better speed and quality than
+the standard library.
+
+The package provides two event-driven propagation engines. The analytic solver
+implements the approach introduced by Büker and co-authors and its later
+extension.[^1][^2] The Monte Carlo module follows an event-based simulation
+scheme similar to the one described by De Wilde et al.[^3]
+Both engines share the same Python interface and operate on an identical DAG
+representation.
 
 ## Background
 
@@ -58,7 +68,9 @@ pip install mc-dagprop
 
 ---
 
-## Quickstart
+## Usage
+
+### Quickstart
 
 ```python
 from mc_dagprop import (
@@ -266,6 +278,16 @@ same baseline and detect performance regressions.
 ```bash
 python benchmarks/benchmark_simulator.py
 ```
+
+---
+
+## References
+
+[^1]: T. Büker, "Railway Delay Propagation..." (original analytic solver).
+[^2]: Follow-up extension to Büker's method describing the analytic event
+    propagation in more detail.
+[^3]: S. De Wilde *et al.*, "Improving the robustness in railway station areas,"
+    *European Journal of Operational Research*, 2014.
 
 ---
 

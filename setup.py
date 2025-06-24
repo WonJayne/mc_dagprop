@@ -39,9 +39,9 @@ pyproject_path = Path(__file__).with_name("pyproject.toml")
 if pyproject_path.exists():
     with pyproject_path.open("rb") as f:
         pyproject = tomllib.load(f)
-    version = pyproject.get("project", {}).get("version", "0.5.1")
+    version = pyproject.get("project", {}).get("version", "0.6.0")
 else:
-    version = "0.5.1"
+    version = "0.6.0"
 
 ext_modules = [
     Extension(
