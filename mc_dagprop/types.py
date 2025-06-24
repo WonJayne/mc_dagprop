@@ -2,18 +2,12 @@ from __future__ import annotations
 
 from typing import NewType
 
-__all__ = [
-    "Second",
-    "ProbabilityMass",
-    "ActivityIndex",
-    "EventIndex",
-    "ActivityType",
-    "EventId",
-]
+__all__ = ["Second", "ProbabilityMass", "ActivityIndex", "EventIndex", "ActivityType", "EventId"]
 
 Second = NewType("Second", float)
 ProbabilityMass = NewType("ProbabilityMass", float)
 
+# Index of an activity (edge) in the DAG.
 ActivityIndex = NewType("ActivityIndex", int)
 EventIndex = NewType("EventIndex", int)
 ActivityType = NewType("ActivityType", int)
