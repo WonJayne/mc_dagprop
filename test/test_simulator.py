@@ -3,33 +3,33 @@ from concurrent.futures import ThreadPoolExecutor
 from itertools import chain
 
 import numpy as np
-from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
+from mc_dagprop import EventTimestamp, GenericDelayGenerator, Activity, DagContext, Event, Simulator
 
 
 class TestSimulator(unittest.TestCase):
     def setUp(self) -> None:
         self.events = [
-            SimEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
-            SimEvent("1", EventTimestamp(5.0, 100.0, 0.0)),
-            SimEvent("2", EventTimestamp(10.0, 100.0, 0.0)),
-            SimEvent("3", EventTimestamp(22.0, 100.0, 0.0)),
-            SimEvent("4", EventTimestamp(20.0, 100.0, 0.0)),
-            SimEvent("5", EventTimestamp(100.0, 100.0, 0.0)),
+            Event("0", EventTimestamp(0.0, 100.0, 0.0)),
+            Event("1", EventTimestamp(5.0, 100.0, 0.0)),
+            Event("2", EventTimestamp(10.0, 100.0, 0.0)),
+            Event("3", EventTimestamp(22.0, 100.0, 0.0)),
+            Event("4", EventTimestamp(20.0, 100.0, 0.0)),
+            Event("5", EventTimestamp(100.0, 100.0, 0.0)),
         ]
 
-        # 2 links: (src, dst) ? SimActivity)
+        # 2 links: (src, dst) -> Activity
         self.link_map = {
-            (0, 1): (0, SimActivity(3.0, 1)),
-            (1, 2): (1, SimActivity(5.0, 1)),
-            (1, 3): (2, SimActivity(5.0, 1)),
-            (2, 4): (3, SimActivity(15.0, 2)),
-            (3, 4): (4, SimActivity(10.0, 3)),
+            (0, 1): (0, Activity(3.0, 1)),
+            (1, 2): (1, Activity(5.0, 1)),
+            (1, 3): (2, Activity(5.0, 1)),
+            (2, 4): (3, Activity(15.0, 2)),
+            (3, 4): (4, Activity(10.0, 3)),
         }
 
         # Precedence: node_idx ? [(pred_idx, link_idx)]
         self.precedence_list = [(1, [(0, 0)]), (2, [(1, 1)]), (3, [(1, 2)]), (4, [(2, 3), (3, 4)])]
 
-        self.context = SimContext(
+        self.context = DagContext(
             events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0
         )
 
@@ -62,7 +62,7 @@ class TestSimulator(unittest.TestCase):
 
     def test_unsorted_precedence_same_result(self):
         unsorted = list(reversed(self.precedence_list))
-        ctx_unsorted = SimContext(
+        ctx_unsorted = DagContext(
             events=self.events, activities=self.link_map, precedence_list=unsorted, max_delay=10.0
         )
 
@@ -173,10 +173,10 @@ class TestSimulator(unittest.TestCase):
 
 class LargeScaleTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.events = [SimEvent(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(10_000)]
-        self.link_map = {(i, i + 1): (i, SimActivity(3.0, 1)) for i in range(9999)}
+        self.events = [Event(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(10_000)]
+        self.link_map = {(i, i + 1): (i, Activity(3.0, 1)) for i in range(9999)}
         self.precedence_list = [(i, [(i - 1, i)]) for i in range(1, 10_000)]
-        self.context = SimContext(
+        self.context = DagContext(
             events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0
         )
 

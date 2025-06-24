@@ -3,12 +3,12 @@ from collections import defaultdict
 from collections.abc import Collection
 
 import plotly.graph_objects as go
-from mc_dagprop import SimContext, SimResult
+from mc_dagprop import DagContext, SimResult
 from plotly.subplots import make_subplots
 
 
 def retrieve_absolute_and_relative_delays(
-    context: SimContext, result: SimResult
+    context: DagContext, result: SimResult
 ) -> tuple[dict[int, list[float]], dict[int, list[float]]]:
     """
     Bucket absolute and relative delays by activity_type.
@@ -27,7 +27,7 @@ def retrieve_absolute_and_relative_delays(
     return dict(absolute_delays_by_type), dict(relative_delays_by_type)
 
 
-def plot_activity_delays(context: SimContext, results: Collection[SimResult]) -> go.Figure:
+def plot_activity_delays(context: DagContext, results: Collection[SimResult]) -> go.Figure:
     """
     Build a Plotly figure with two rows of histograms per activity type:
       • row 1: absolute delays

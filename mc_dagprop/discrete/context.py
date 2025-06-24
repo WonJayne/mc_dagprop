@@ -5,7 +5,7 @@ from enum import unique, IntEnum
 
 import numpy as np
 
-from mc_dagprop import EventTimestamp
+from mc_dagprop.core import Event, EventTimestamp
 from mc_dagprop.types import EdgeIndex, NodeIndex, ProbabilityMass, Second
 from .pmf import DiscretePMF
 
@@ -24,22 +24,6 @@ class AnalyticEdge:
     pmf: DiscretePMF
 
 
-@dataclass(frozen=True, slots=True)
-class ScheduledEvent:
-    """Timing information for a planned event.
-
-    Attributes:
-        id: Unique identifier of the event.
-        timestamp: Earliest, latest and nominal time bounds.
-    """
-
-    id: str
-    timestamp: EventTimestamp
-
-    @property
-    def bounds(self) -> tuple[Second, Second]:
-        """Return the lower and upper bounds of the event."""
-        return self.timestamp.earliest, self.timestamp.latest
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +52,7 @@ class AnalyticContext:
         step_size: Discrete time step shared by all distributions.
     """
 
-    events: tuple[ScheduledEvent, ...]
+    events: tuple[Event, ...]
     activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
     precedence_list: tuple[tuple[NodeIndex, tuple[PredecessorTuple, ...]], ...]
     step_size: Second

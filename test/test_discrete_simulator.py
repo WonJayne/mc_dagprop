@@ -8,13 +8,12 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from mc_dagprop import (
     AnalyticContext,
-    ScheduledEvent,
     DiscretePMF,
     EventTimestamp,
     GenericDelayGenerator,
-    SimActivity,
-    SimContext,
-    SimEvent,
+    Activity,
+    DagContext,
+    Event,
     Simulator,
     create_discrete_simulator,
 )
@@ -25,14 +24,14 @@ from mc_dagprop.discrete.context import AnalyticEdge, SimulatedEvent
 class TestDiscreteSimulator(unittest.TestCase):
     def setUp(self) -> None:
         self.events = (
-            ScheduledEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
-            ScheduledEvent("1", EventTimestamp(0.0, 100.0, 0.0)),
-            ScheduledEvent("2", EventTimestamp(0.0, 100.0, 0.0)),
+            Event("0", EventTimestamp(0.0, 100.0, 0.0)),
+            Event("1", EventTimestamp(0.0, 100.0, 0.0)),
+            Event("2", EventTimestamp(0.0, 100.0, 0.0)),
         )
         self.mc_events = (
-            SimEvent("0", EventTimestamp(0.0, 100.0, 0.0)),
-            SimEvent("1", EventTimestamp(0.0, 100.0, 0.0)),
-            SimEvent("2", EventTimestamp(0.0, 100.0, 0.0)),
+            Event("0", EventTimestamp(0.0, 100.0, 0.0)),
+            Event("1", EventTimestamp(0.0, 100.0, 0.0)),
+            Event("2", EventTimestamp(0.0, 100.0, 0.0)),
         )
         self.precedence = ((1, ((0, 0),)), (2, ((1, 1),)))
 
@@ -47,9 +46,9 @@ class TestDiscreteSimulator(unittest.TestCase):
             overflow_rule=OverflowRule.TRUNCATE,
         )
 
-        self.mc_context = SimContext(
+        self.mc_context = DagContext(
             events=self.mc_events,
-            activities={(0, 1): (0, SimActivity(0.0, 1)), (1, 2): (1, SimActivity(0.0, 2))},
+            activities={(0, 1): (0, Activity(0.0, 1)), (1, 2): (1, Activity(0.0, 2))},
             precedence_list=self.precedence,
             max_delay=5.0,
         )
@@ -137,9 +136,9 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_bounds_and_overflow(self) -> None:
         events = (
-            ScheduledEvent("0", EventTimestamp(0.0, 0.0, 0.0)),
-            ScheduledEvent("1", EventTimestamp(0.0, 1.5, 0.0)),
-            ScheduledEvent("2", EventTimestamp(0.0, 1.8, 0.0)),
+            Event("0", EventTimestamp(0.0, 0.0, 0.0)),
+            Event("1", EventTimestamp(0.0, 1.5, 0.0)),
+            Event("2", EventTimestamp(0.0, 1.8, 0.0)),
         )
         ctx = AnalyticContext(
             events=events,
@@ -164,8 +163,8 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_rule_combinations(self) -> None:
         events = (
-            ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
-            ScheduledEvent("1", EventTimestamp(0.0, 1.0, 0.0)),
+            Event("0", EventTimestamp(0.0, 10.0, 0.0)),
+            Event("1", EventTimestamp(0.0, 1.0, 0.0)),
         )
         edge = AnalyticEdge(0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1.0))
         ctx = AnalyticContext(
@@ -210,7 +209,7 @@ class TestDiscreteSimulator(unittest.TestCase):
     def test_large_uniform_network(self) -> None:
         values = np.arange(-180.0, 1800.1, 1.0)
         probs = np.ones_like(values, dtype=float) / len(values)
-        events = tuple(ScheduledEvent(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(5))
+        events = tuple(Event(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(5))
         precedence = ((1, ((0, 0),)), (2, ((0, 1),)), (3, ((1, 2), (2, 3))), (4, ((2, 4), (3, 5))))
         activities = {
             (0, 1): (0, AnalyticEdge(0, DiscretePMF(values, probs, step=1.0))),
@@ -238,7 +237,7 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_invalid_event_bounds(self) -> None:
         events = (
-            ScheduledEvent("0", EventTimestamp(5.0, 4.0, 0.0)),
+            Event("0", EventTimestamp(5.0, 4.0, 0.0)),
         )
         ctx = AnalyticContext(
             events=events,
@@ -253,8 +252,8 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_cycle_detection(self) -> None:
         events = (
-            ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
-            ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0)),
+            Event("0", EventTimestamp(0.0, 10.0, 0.0)),
+            Event("1", EventTimestamp(0.0, 10.0, 0.0)),
         )
         edge = AnalyticEdge(0, DiscretePMF(np.array([1.0]), np.array([1.0]), step=1.0))
         ctx = AnalyticContext(
@@ -274,8 +273,8 @@ class TestDiscreteSimulator(unittest.TestCase):
 
 def test_run_returns_simulated_event_objects() -> None:
     events = (
-        ScheduledEvent("0", EventTimestamp(0.0, 10.0, 0.0)),
-        ScheduledEvent("1", EventTimestamp(0.0, 10.0, 0.0)),
+        Event("0", EventTimestamp(0.0, 10.0, 0.0)),
+        Event("1", EventTimestamp(0.0, 10.0, 0.0)),
     )
     edge = AnalyticEdge(
         0,
@@ -300,7 +299,7 @@ def test_clipping_tolerates_rounding_errors() -> None:
     probs = np.array([0.25, 0.25, 0.5 + 1e-12])
     pmf = DiscretePMF(vals, probs, step=1.0)
     ctx = AnalyticContext(
-        events=(ScheduledEvent("e0", EventTimestamp(0.0, 1.0, 0.0)),),
+        events=(Event("e0", EventTimestamp(0.0, 1.0, 0.0)),),
         activities={},
         precedence_list=(),
         step_size=1.0,

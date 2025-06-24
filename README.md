@@ -63,28 +63,28 @@ pip install mc-dagprop
 ```python
 from mc_dagprop import (
     EventTimestamp,
-    SimEvent,
-    SimActivity,
-    SimContext,
+    Event,
+    Activity,
+    DagContext,
     GenericDelayGenerator,
     Simulator,
 )
 
 # 1) Build your DAG timing context
 events = [
-    SimEvent("A", EventTimestamp(0.0, 100.0, 0.0)),
-    SimEvent("B", EventTimestamp(10.0, 100.0, 0.0)),
+    Event("A", EventTimestamp(0.0, 100.0, 0.0)),
+    Event("B", EventTimestamp(10.0, 100.0, 0.0)),
 ]
 
 activities = {
-    (0, 1): (0, SimActivity(minimal_duration=60.0, activity_type=1)),
+    (0, 1): (0, Activity(minimal_duration=60.0, activity_type=1)),
 }
 
 precedence = [
     (1, [(0, 0)]),
 ]
 
-ctx = SimContext(
+ctx = DagContext(
     events=events,
     activities=activities,
     precedence_list=precedence,
@@ -115,26 +115,26 @@ Holds the scheduling window and actual time for one event (node):
 - `latest`   – latest allowed occurrence  
 - `actual`   – scheduled (baseline) timestamp  
 
-### `SimEvent(id: str, timestamp: EventTimestamp)`
+### `Event(id: str, timestamp: EventTimestamp)`
 
 Wraps a DAG node with:
 
 - `id`        – string key for the node  
 - `timestamp` – an `EventTimestamp` instance  
 
-### `SimActivity(minimal_duration: float, activity_type: int)`
+### `Activity(minimal_duration: float, activity_type: int)`
 
 Represents an edge in the DAG:
 
 - `minimal_duration` – minimal (base) duration  
 - `activity_type`    – integer type identifier  
 
-### `SimContext(events, activities, precedence_list, max_delay)`
+### `DagContext(events, activities, precedence_list, max_delay)`
 
 Container for your DAG:
 
-- `events`:          `list[SimEvent]`
-- `activities`:      `dict[(src_idx, dst_idx), (link_idx, SimActivity)]`
+- `events`:          `list[Event]`
+- `activities`:      `dict[(src_idx, dst_idx), (link_idx, Activity)]`
 - `precedence_list`: `list[(target_idx, [(pred_idx, link_idx), …])]`
 - `max_delay`:       overall cap on delay propagation
   - Can be given in any order. `Simulator` will sort topologically and raise
@@ -151,7 +151,7 @@ Configurable delay factory (one distribution per `activity_type`):
 - `.add_empirical_relative(activity_type, factors, weights)`
 - `.set_seed(seed)`  
 
-### `Simulator(context: SimContext, generator: GenericDelayGenerator)`
+### `Simulator(context: DagContext, generator: GenericDelayGenerator)`
 
 - `.run(seed: int) → SimResult`  
 - `.run_many(seeds: Sequence[int]) → list[SimResult]`  
@@ -172,13 +172,13 @@ from mc_dagprop import (
     AnalyticContext,
     DiscretePMF,
     EventTimestamp,
-    SimEvent,
+    Event,
     create_discrete_simulator,
 )
 
 events = (
-    SimEvent("A", EventTimestamp(0, 10, 0)),
-    SimEvent("B", EventTimestamp(0, 10, 0)),
+    Event("A", EventTimestamp(0, 10, 0)),
+    Event("B", EventTimestamp(0, 10, 0)),
 )
 activities = {(0, 1): (0, DiscretePMF([1.0, 2.0], [0.5, 0.5], step=1.0))}
 precedence = (

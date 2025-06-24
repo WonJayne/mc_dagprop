@@ -3,14 +3,13 @@
 from importlib.metadata import version
 
 try:
-    from ._core import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, SimResult, Simulator
+    from ._core import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, SimResult, Simulator
 except ModuleNotFoundError as exc:  # pragma: no cover - compiled module missing
     raise ImportError(
         "mc_dagprop requires the compiled extension 'mc_dagprop._core'. " "Install the package from source to build it."
     ) from exc
 from .discrete import (
     AnalyticContext,
-    ScheduledEvent,
     SimulatedEvent,
     DiscretePMF,
     DiscreteSimulator,
@@ -25,14 +24,13 @@ __version__ = version("mc-dagprop")
 
 __all__ = [
     "GenericDelayGenerator",
-    "SimContext",
+    "DagContext",
     "SimResult",
-    "SimEvent",
-    "SimActivity",
+    "Event",
+    "Activity",
     "Simulator",
     "EventTimestamp",
     "DiscretePMF",
-    "ScheduledEvent",
     "SimulatedEvent",
     "UnderflowRule",
     "OverflowRule",

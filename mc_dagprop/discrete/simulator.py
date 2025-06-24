@@ -123,7 +123,7 @@ class DiscreteSimulator:
                 for next_pmf in to_combine[1:]:
                     resulting_pmf = resulting_pmf.maximum(next_pmf)
 
-            lb, ub = ev.bounds
+            lb, ub = ev.timestamp.earliest, ev.timestamp.latest
             events[node_index] = self._convert_to_simulated_event(resulting_pmf, lb, ub)
 
         return tuple(events[i] for i in range(n_events))
