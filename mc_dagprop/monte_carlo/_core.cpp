@@ -366,7 +366,14 @@ PYBIND11_MODULE(_core, m) {
              "Create an event timestamp (earliest, latest, actual).")
         .def_readwrite("earliest", &EventTimestamp::earliest, "Earliest bound")
         .def_readwrite("latest", &EventTimestamp::latest, "Latest bound")
-        .def_readwrite("actual", &EventTimestamp::actual, "Scheduled time");
+        .def_readwrite("actual", &EventTimestamp::actual, "Scheduled time")
+        .def(
+            "__repr__",
+            [](const EventTimestamp &ts) {
+                return py::str("EventTimestamp(earliest={}, latest={}, actual={})")
+                    .format(ts.earliest, ts.latest, ts.actual);
+            },
+            "Return ``repr(self)`` style string.");
 
     // Event
     py::class_<Event> event_cls(m, "Event");
@@ -374,7 +381,15 @@ PYBIND11_MODULE(_core, m) {
         .def(py::init<std::string, EventTimestamp>(), py::arg("event_id"), py::arg("timestamp"),
              "An event node with its ID and timestamp")
         .def_readwrite("event_id", &Event::event_id, "Node identifier")
-        .def_readwrite("timestamp", &Event::ts, "Event timing info");
+        .def_readwrite("timestamp", &Event::ts, "Event timing info")
+        .def(
+            "__repr__",
+            [](const Event &ev) {
+                py::object id_r = py::repr(py::cast(ev.event_id));
+                py::object ts_r = py::repr(py::cast(ev.ts));
+                return py::str("Event(event_id={}, timestamp={})").format(id_r, ts_r);
+            },
+            "Return ``repr(self)`` style string.");
 
     // Activity
     py::class_<Activity> activity_cls(m, "Activity");
@@ -387,7 +402,15 @@ PYBIND11_MODULE(_core, m) {
              "An activity (edge) with index, base duration and type")
         .def_readwrite("idx", &Activity::idx, "Index of the activity")
         .def_readwrite("minimal_duration", &Activity::duration, "Base duration")
-        .def_readwrite("activity_type", &Activity::activity_type, "Type ID for delay dist.");
+        .def_readwrite("activity_type", &Activity::activity_type, "Type ID for delay dist.")
+        .def(
+            "__repr__",
+            [](const Activity &act) {
+                return py::str(
+                           "Activity(idx={}, minimal_duration={}, activity_type={})")
+                    .format(act.idx, act.duration, act.activity_type);
+            },
+            "Return ``repr(self)`` style string.");
 
     // DagContext
     py::class_<DagContext> ctx_cls(m, "DagContext");
@@ -399,7 +422,18 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("events", &DagContext::events)
         .def_readwrite("activities", &DagContext::activity_map)
         .def_readwrite("precedence_list", &DagContext::precedence_list)
-        .def_readwrite("max_delay", &DagContext::max_delay);
+        .def_readwrite("max_delay", &DagContext::max_delay)
+        .def(
+            "__repr__",
+            [](const DagContext &ctx) {
+                py::object events_r = py::repr(py::cast(ctx.events));
+                py::object act_r = py::repr(py::cast(ctx.activity_map));
+                py::object preds_r = py::repr(py::cast(ctx.precedence_list));
+                return py::str(
+                           "DagContext(events={}, activities={}, precedence_list={}, max_delay={})")
+                    .format(events_r, act_r, preds_r, ctx.max_delay);
+            },
+            "Return ``repr(self)`` style string.");
 
     // Turn core structs into frozen dataclasses
     py::object dataclass_fn = py::module_::import("dataclasses").attr("dataclass");
