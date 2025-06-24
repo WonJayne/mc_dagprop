@@ -1,13 +1,13 @@
 from demo._shared import build_example_context, ExampleConfig
 
-from mc_dagprop import create_discrete_simulator
+from mc_dagprop import create_analytic_propagator
 
 
 def main() -> None:
     """Run the analytic propagation demonstration."""
 
     ctx = build_example_context(ExampleConfig())
-    sim = create_discrete_simulator(ctx)
+    sim = create_analytic_propagator(ctx)
     results = sim.run()
 
     for scheduled, result in zip(ctx.events, results):
