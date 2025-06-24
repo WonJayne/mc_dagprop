@@ -152,3 +152,10 @@ exclude-protected = "_asdict,_fields,_replace,_source,_make"
 [tool.pylint.exceptions]
 overgeneral-exceptions = "Exception"
 
+[tool.setuptools.package-data]
+"mc_dagprop" = ["py.typed"]
+"mc_dagprop.monte_carlo" = ["*.pyi"]
+
+[tool.setuptools.packages.find]
+include = ["mc_dagprop*"]
+

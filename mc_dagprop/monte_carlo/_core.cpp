@@ -1,4 +1,4 @@
-// mc_dagprop/_core.cpp
+// mc_dagprop/monte_carlo/_core.cpp
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>

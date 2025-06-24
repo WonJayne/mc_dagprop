@@ -45,9 +45,9 @@ else:
 
 ext_modules = [
     Extension(
-        "mc_dagprop._core",
-        sources=["mc_dagprop/_core.cpp"],
-        include_dirs=[GetPybindInclude(), "mc_dagprop"],
+        "mc_dagprop.monte_carlo._core",
+        sources=["mc_dagprop/monte_carlo/_core.cpp"],
+        include_dirs=[GetPybindInclude(), "mc_dagprop/monte_carlo"],
         language="c++",
         extra_compile_args=platform_compile_args,
         extra_link_args=platform_linker_args,
@@ -63,6 +63,9 @@ setup(
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
     zip_safe=False,
-    package_data={"mc_dagprop": ["py.typed", "*.pyi"]},
+    package_data={
+        "mc_dagprop": ["py.typed"],
+        "mc_dagprop.monte_carlo": ["*.pyi"],
+    },
     include_package_data=True,
 )
