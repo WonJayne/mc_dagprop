@@ -17,8 +17,8 @@ from mc_dagprop import (
     Simulator,
     create_discrete_simulator,
 )
-from mc_dagprop.discrete import UnderflowRule, OverflowRule
-from mc_dagprop.discrete.context import AnalyticEdge, SimulatedEvent
+from mc_dagprop.analytic import UnderflowRule, OverflowRule
+from mc_dagprop.analytic.context import AnalyticEdge, SimulatedEvent
 
 
 class TestDiscreteSimulator(unittest.TestCase):

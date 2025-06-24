@@ -8,7 +8,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - compiled module missing
     raise ImportError(
         "mc_dagprop requires the compiled extension 'mc_dagprop._core'. " "Install the package from source to build it."
     ) from exc
-from .discrete import (
+from .analytic import (
     AnalyticContext,
     SimulatedEvent,
     DiscretePMF,

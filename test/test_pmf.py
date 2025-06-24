@@ -1,7 +1,7 @@
 import unittest
 
 import numpy as np
-from mc_dagprop.discrete.pmf import DiscretePMF
+from mc_dagprop.analytic.pmf import DiscretePMF
 
 
 class TestDiscretePMF(unittest.TestCase):
