@@ -1,14 +1,16 @@
 # mc_dagprop/_core.pyi
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from typing import TypeAlias
+from mc_dagprop.types import (
+    ActivityIndex,
+    ActivityType,
+    EventId,
+    EventIndex,
+    Second,
+)
 
 from numpy._typing import NDArray
 
-EventIndex: TypeAlias = int
-ActivityIndex: TypeAlias = int
-ActivityType: TypeAlias = int
-EventId: TypeAlias = str
-Second: TypeAlias = float
+
 
 class SimEvent:
     """

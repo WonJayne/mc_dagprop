@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from mc_dagprop.discrete import Second, ProbabilityMass
+from mc_dagprop.types import ProbabilityMass, Second
 
 
 @dataclass(frozen=True, slots=True)
