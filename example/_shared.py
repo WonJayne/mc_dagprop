@@ -6,8 +6,8 @@ import numpy as np
 from mc_dagprop import (
     AnalyticContext,
     DiscretePMF,
+    Event,
     EventTimestamp,
-    ScheduledEvent,
     UnderflowRule,
     OverflowRule,
 )
@@ -25,16 +25,16 @@ def build_example_context(cfg: ExampleConfig = ExampleConfig()) -> AnalyticConte
     """Return an :class:`AnalyticContext` with ten events and twelve activities."""
 
     events = (
-        ScheduledEvent("E0", EventTimestamp(0.0, 0.0, 0.0)),
-        ScheduledEvent("E1", EventTimestamp(2.0, 5.0, 3.0)),
-        ScheduledEvent("E2", EventTimestamp(4.0, 8.0, 6.0)),
-        ScheduledEvent("E3", EventTimestamp(6.0, 11.0, 8.0)),
-        ScheduledEvent("E4", EventTimestamp(7.0, 13.0, 9.0)),
-        ScheduledEvent("E5", EventTimestamp(10.0, 15.0, 12.0)),
-        ScheduledEvent("E6", EventTimestamp(8.0, 12.0, 9.0)),
-        ScheduledEvent("E7", EventTimestamp(11.0, 16.0, 13.0)),
-        ScheduledEvent("E8", EventTimestamp(12.0, 18.0, 14.0)),
-        ScheduledEvent("E9", EventTimestamp(14.0, 20.0, 16.0)),
+        Event("E0", EventTimestamp(0.0, 0.0, 0.0)),
+        Event("E1", EventTimestamp(2.0, 5.0, 3.0)),
+        Event("E2", EventTimestamp(4.0, 8.0, 6.0)),
+        Event("E3", EventTimestamp(6.0, 11.0, 8.0)),
+        Event("E4", EventTimestamp(7.0, 13.0, 9.0)),
+        Event("E5", EventTimestamp(10.0, 15.0, 12.0)),
+        Event("E6", EventTimestamp(8.0, 12.0, 9.0)),
+        Event("E7", EventTimestamp(11.0, 16.0, 13.0)),
+        Event("E8", EventTimestamp(12.0, 18.0, 14.0)),
+        Event("E9", EventTimestamp(14.0, 20.0, 16.0)),
     )
 
     step = cfg.step_size

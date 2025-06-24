@@ -6,9 +6,9 @@ import numpy as np
 
 from mc_dagprop import (
     GenericDelayGenerator,
-    SimActivity,
-    SimContext,
-    SimEvent,
+    Activity,
+    DagContext,
+    Event,
     Simulator,
 )
 from ._shared import ExampleConfig, build_example_context
@@ -26,13 +26,13 @@ def build_mc_simulator(context_cfg: ExampleConfig, max_delay: float) -> Simulato
     """Return a :class:`Simulator` mirroring the analytic example."""
 
     analytic_ctx = build_example_context(context_cfg)
-    events = [SimEvent(ev.id, ev.timestamp) for ev in analytic_ctx.events]
+    events = [Event(ev.id, ev.timestamp) for ev in analytic_ctx.events]
 
-    activities: dict[tuple[int, int], tuple[int, SimActivity]] = {}
+    activities: dict[tuple[int, int], tuple[int, Activity]] = {}
     generator = GenericDelayGenerator()
 
     for (src, dst), (edge_idx, edge) in analytic_ctx.activities.items():
-        activities[(src, dst)] = (edge_idx, SimActivity(0.0, edge_idx))
+        activities[(src, dst)] = (edge_idx, Activity(0.0, edge_idx))
         pmf = edge.pmf
         generator.add_empirical_absolute(
             edge_idx,
@@ -40,7 +40,7 @@ def build_mc_simulator(context_cfg: ExampleConfig, max_delay: float) -> Simulato
             pmf.probabilities.tolist(),
         )
 
-    mc_ctx = SimContext(
+    mc_ctx = DagContext(
         events=events,
         activities=activities,
         precedence_list=analytic_ctx.precedence_list,
