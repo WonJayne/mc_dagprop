@@ -131,7 +131,6 @@ exposes the `AnalyticPropagator`, `DiscreteSimulator` and helper classes.
 
 ### Shared components
 
-- `mc_dagprop.core` – basic dataclasses like `Event`, `EventTimestamp`, `Activity` and `DagContext`.
 - `mc_dagprop.types` – typed aliases for seconds, indices and identifiers.
 - `mc_dagprop.utils` – plotting and inspection utilities.
 

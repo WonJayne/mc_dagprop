@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum, unique
 
 import numpy as np
-from mc_dagprop.core import Event
+from mc_dagprop import Event
 from mc_dagprop.types import ActivityIndex, EventIndex, ProbabilityMass, Second
 
 from ._pmf import DiscretePMF

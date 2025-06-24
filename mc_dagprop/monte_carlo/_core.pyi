@@ -1,9 +1,6 @@
 # mc_dagprop/monte_carlo/_core.pyi
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
-from mc_dagprop.core import Activity as CoreActivity
-from mc_dagprop.core import DagContext as CoreDagContext
-from mc_dagprop.core import Event as CoreEvent
 from mc_dagprop.types import ActivityIndex, ActivityType, EventId, EventIndex, Second
 from numpy._typing import NDArray
 
@@ -15,11 +12,11 @@ class EventTimestamp:
 
     earliest: Second
     latest: Second
-    timestamp: Second
+    actual: Second
 
-    def __init__(self, earliest: Second, latest: Second, timestamp: Second) -> None: ...
+    def __init__(self, earliest: Second, latest: Second, actual: Second) -> None: ...
 
-class Event(CoreEvent):
+class Event:
     """
     Represents an event (node) with its earliest/latest window and actual timestamp.
     """
@@ -27,9 +24,9 @@ class Event(CoreEvent):
     event_id: EventId
     timestamp: EventTimestamp
 
-    def __init__(self, id_: EventId, timestamp: "EventTimestamp") -> None: ...
+    def __init__(self, event_id: EventId, timestamp: EventTimestamp) -> None: ...
 
-class Activity(CoreActivity):
+class Activity:
     """
     Represents an activity (edge) in the DAG, with its minimal duration and type.
     """
@@ -40,7 +37,7 @@ class Activity(CoreActivity):
 
     def __init__(self, idx: ActivityIndex, minimal_duration: Second, activity_type: ActivityType) -> None: ...
 
-class DagContext(CoreDagContext):
+class DagContext:
     """
     Wraps the DAG: a list of events, activities, a precedence list and a
     max?delay. ``precedence_list`` can be in any order; ``Simulator`` sorts it
