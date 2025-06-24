@@ -203,7 +203,7 @@ before constructing the simulator and raises an error when any edge uses a
 different step. All PMF value grids must therefore have constant spacing equal
 to ``step_size`` and start on a multiple of that step. Pass ``validate=False``
 to skip this check if you have already validated the context yourself.
-Each ``ScheduledEvent`` may specify ``bounds=(lower, upper)`` to clip the
+Each ``Event`` may specify ``bounds=(lower, upper)`` to clip the
 resulting distribution. Overflow and underflow mass can be truncated to the
 closest bound, removed or redistributed across the remaining range. Control this
 behaviour via the optional ``underflow_rule`` and ``overflow_rule`` arguments of
