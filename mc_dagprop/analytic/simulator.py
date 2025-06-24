@@ -44,8 +44,10 @@ def _build_topology(
     return tuple(preds_by_target), tuple(order)
 
 
-def create_discrete_simulator(context: AnalyticContext, validate: bool = True) -> "DiscreteSimulator":
-    """Return a :class:`DiscreteSimulator` with topology built for ``context``.
+def create_analytic_propagator(
+    context: AnalyticContext, validate: bool = True
+) -> "AnalyticPropagator":
+    """Return an :class:`AnalyticPropagator` with topology built for ``context``.
 
     Parameters
     ----------
@@ -61,11 +63,15 @@ def create_discrete_simulator(context: AnalyticContext, validate: bool = True) -
     if validate:
         validate_context(context)
     predecessors, order = _build_topology(context)
-    return DiscreteSimulator(context=context, _predecessors_by_target=predecessors, _topological_node_order=order)
+    return AnalyticPropagator(
+        context=context,
+        _predecessors_by_target=predecessors,
+        _topological_node_order=order,
+    )
 
 
 @dataclass(frozen=True, slots=True)
-class DiscreteSimulator:
+class AnalyticPropagator:
     """Propagate discrete PMFs through a DAG.
 
     Probability mass outside an event's bounds can either be truncated to the
@@ -199,3 +205,8 @@ class DiscreteSimulator:
         if total_mass > 1.0 and not np.isclose(total_mass, 1.0):
             raise ValueError("Total probability mass exceeds 1.0 after clipping")
         return SimulatedEvent(clipped, under_mass, over_mass)
+
+
+# Backward compatibility
+DiscreteSimulator = AnalyticPropagator
+create_discrete_simulator = create_analytic_propagator

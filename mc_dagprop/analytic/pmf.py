@@ -80,7 +80,7 @@ class DiscretePMF:
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
         """Return ``max(X, Y)`` for two independent PMFs.
 
-        This operation is used by :class:`DiscreteSimulator` to combine delay
+        This operation is used by :class:`AnalyticPropagator` to combine delay
         distributions when an event has multiple predecessors.
         """
         if len(self.values) == 1 and len(other.values) == 1:
