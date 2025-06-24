@@ -7,27 +7,27 @@ import random
 import time
 from collections.abc import Iterable
 
-from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
+from mc_dagprop import EventTimestamp, GenericDelayGenerator, Activity, DagContext, Event, Simulator
 
 # Use a reasonably large graph similar to the one used in the tests
 N_NODES = 10_000
 
 
-def build_context() -> SimContext:
-    events = [SimEvent(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(N_NODES)]
-    link_map = {(i, i + 1): (i, SimActivity(3.0 + random.random(), 1)) for i in range(N_NODES - 1)}
+def build_context() -> DagContext:
+    events = [Event(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(N_NODES)]
+    link_map = {(i, i + 1): (i, Activity(3.0 + random.random(), 1)) for i in range(N_NODES - 1)}
     precedence_list = [(i, [(i - 1, i)]) for i in range(1, N_NODES)]
-    return SimContext(events=events, activities=link_map, precedence_list=precedence_list, max_delay=10.0)
+    return DagContext(events=events, activities=link_map, precedence_list=precedence_list, max_delay=10.0)
 
 
-def build_constant_sim(ctx: SimContext) -> Simulator:
+def build_constant_sim(ctx: DagContext) -> Simulator:
     """Simulator with constant delay distribution."""
     gen = GenericDelayGenerator()
     gen.add_constant(activity_type=1, factor=1.0)
     return Simulator(ctx, gen)
 
 
-def build_exponential_sim(ctx: SimContext) -> Simulator:
+def build_exponential_sim(ctx: DagContext) -> Simulator:
     """Simulator with exponential delay distribution."""
     gen = GenericDelayGenerator()
     gen.add_exponential(activity_type=1, lambda_=0.1, max_scale=1.0)

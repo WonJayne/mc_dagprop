@@ -1,18 +1,13 @@
 # mc_dagprop/_core.pyi
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from mc_dagprop.types import (
-    ActivityIndex,
-    ActivityType,
-    EventId,
-    EventIndex,
-    Second,
-)
+from mc_dagprop.types import ActivityIndex, ActivityType, EventId, EventIndex, Second
+from mc_dagprop.core import Activity as CoreActivity, DagContext as CoreDagContext, Event as CoreEvent, EventTimestamp
 
 from numpy._typing import NDArray
 
 
 
-class SimEvent:
+class Event(CoreEvent):
     """
     Represents an event (node) with its earliest/latest window and actual timestamp.
     """
@@ -22,18 +17,8 @@ class SimEvent:
 
     def __init__(self, id_: EventId, timestamp: "EventTimestamp") -> None: ...
 
-class EventTimestamp:
-    """
-    Holds the earliest/latest bounds and the actual (scheduled) time for an event.
-    """
 
-    earliest: Second
-    latest: Second
-    actual: Second
-
-    def __init__(self, earliest: Second, latest: Second, actual: Second) -> None: ...
-
-class SimActivity:
+class Activity(CoreActivity):
     """
     Represents an activity (edge) in the DAG, with its minimal duration and type.
     """
@@ -43,22 +28,22 @@ class SimActivity:
 
     def __init__(self, minimal_duration: Second, activity_type: ActivityType) -> None: ...
 
-class SimContext:
+class DagContext(CoreDagContext):
     """
     Wraps the DAG: a list of events, activities, a precedence list and a
     max?delay. ``precedence_list`` can be in any order; ``Simulator`` sorts it
     topologically and raises ``RuntimeError`` on cycles.
     """
 
-    events: Sequence[SimEvent]
-    activities: Mapping[tuple[EventIndex, EventIndex], tuple[ActivityIndex, SimActivity]]
+    events: Sequence[Event]
+    activities: Mapping[tuple[EventIndex, EventIndex], tuple[ActivityIndex, Activity]]
     precedence_list: Sequence[tuple[EventIndex, list[tuple[EventIndex, ActivityIndex]]]]
     max_delay: Second
 
     def __init__(
         self,
-        events: Sequence[SimEvent],
-        activities: Mapping[tuple[EventIndex, EventIndex], tuple[ActivityIndex, SimActivity]],
+        events: Sequence[Event],
+        activities: Mapping[tuple[EventIndex, EventIndex], tuple[ActivityIndex, Activity]],
         precedence_list: Sequence[tuple[EventIndex, list[tuple[EventIndex, ActivityIndex]]]],
         max_delay: Second,
     ) -> None: ...
@@ -95,10 +80,10 @@ class GenericDelayGenerator:
 class Simulator:
     """
     Monte Carlo DAG propagator: run single or batch simulations. ``precedence_list``
-    in the provided ``SimContext`` may be in any order; it is sorted topologically
+    in the provided ``DagContext`` may be in any order; it is sorted topologically
     and a ``RuntimeError`` is raised if cycles are detected.
     """
 
-    def __init__(self, context: SimContext, generator: GenericDelayGenerator) -> None: ...
+    def __init__(self, context: DagContext, generator: GenericDelayGenerator) -> None: ...
     def run(self, seed: int) -> SimResult: ...
     def run_many(self, seeds: Iterable[int]) -> list[SimResult]: ...

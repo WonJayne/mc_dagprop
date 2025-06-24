@@ -3,7 +3,7 @@ import argparse
 from collections.abc import Iterable, Mapping
 
 import plotly.graph_objects as go
-from mc_dagprop import EventTimestamp, GenericDelayGenerator, SimActivity, SimContext, SimEvent, Simulator
+from mc_dagprop import EventTimestamp, GenericDelayGenerator, Activity, DagContext, Event, Simulator
 
 
 def simulate_and_collect(
@@ -17,10 +17,10 @@ def simulate_and_collect(
     realized timestamp of the second (delayed) node.
     """
     # simple 2-node DAG: A -> B
-    events = [SimEvent("A", EventTimestamp(0.0, 0.0, 0.0)), SimEvent("B", EventTimestamp(0.0, 0.0, 0.0))]
-    activities = {(0, 1): (0, SimActivity(minimal_duration=base_duration, activity_type=1))}
+    events = [Event("A", EventTimestamp(0.0, 0.0, 0.0)), Event("B", EventTimestamp(0.0, 0.0, 0.0))]
+    activities = {(0, 1): (0, Activity(minimal_duration=base_duration, activity_type=1))}
     precedence = [(1, [(0, 0)])]
-    ctx = SimContext(events, activities, precedence, max_delay=1e6)
+    ctx = DagContext(events, activities, precedence, max_delay=1e6)
 
     gen = GenericDelayGenerator()
     # configure this single activity_type=1 with the requested distribution

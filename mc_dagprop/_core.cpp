@@ -35,25 +35,25 @@ struct EventTimestamp {
     double earliest, latest, actual;
 };
 
-struct SimEvent {
+struct Event {
     std::string node_id;
     EventTimestamp ts;
 };
 
-struct SimActivity {
+struct Activity {
     double duration;
     int activity_type;
 };
 
 // ── Simulation Context ───────────────────────────────────────────────────
-struct SimContext {
-    vector<SimEvent> events;
-    // user provides link_index + SimActivity
-    unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, SimActivity>> activity_map;
+struct DagContext {
+    vector<Event> events;
+    // user provides link_index + Activity
+    unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, Activity>> activity_map;
     vector<pair<NodeIndex, Preds>> precedence_list;
     double max_delay;
 
-    SimContext(vector<SimEvent> ev, unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, SimActivity>> am,
+    DagContext(vector<Event> ev, unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, Activity>> am,
                vector<pair<NodeIndex, Preds>> pl, double md)
         : events(move(ev)), activity_map(move(am)), precedence_list(move(pl)), max_delay(md) {}
 };
@@ -157,14 +157,14 @@ class GenericDelayGenerator {
 
 // ── Simulator ────────────────────────────────────────────────────────────
 class Simulator {
-    SimContext context_;
+    DagContext context_;
 
     // Delay distributions (flattened)
     std::vector<DistVar> delay_distributions_;
     std::unordered_map<int, int> activity_type_to_dist_index_;
 
     // Activities: one per link index
-    std::vector<SimActivity> activities_;
+    std::vector<Activity> activities_;
     std::vector<int> activity_to_dist_index_;  // -1 = no delay
 
     // Precedence (CSR format)
@@ -187,7 +187,7 @@ class Simulator {
     std::vector<NodeIndex> causing_event_index_;
 
 public:
-    Simulator(SimContext context, GenericDelayGenerator generator)
+    Simulator(DagContext context, GenericDelayGenerator generator)
         : context_(std::move(context)), rng_(std::random_device{}()) {
         // 0) Validate reserved activity_type
         if (generator.dist_map_.count(-1)) {
@@ -209,7 +209,7 @@ public:
             max_link_index = std::max(max_link_index, kv.second.first);
         }
         int link_count = max_link_index + 1;
-        activities_.assign(link_count, SimActivity{0.0, -1});
+        activities_.assign(link_count, Activity{0.0, -1});
         activity_to_dist_index_.assign(link_count, -1);
 
         for (auto &kv : context_.activity_map) {
@@ -363,30 +363,30 @@ PYBIND11_MODULE(_core, m) {
         .def_readwrite("latest", &EventTimestamp::latest, "Latest bound")
         .def_readwrite("actual", &EventTimestamp::actual, "Scheduled time");
 
-    // SimEvent
-    py::class_<SimEvent>(m, "SimEvent")
+    // Event
+    py::class_<Event>(m, "Event")
         .def(py::init<std::string, EventTimestamp>(), py::arg("node_id"), py::arg("timestamp"),
              "An event node with its ID and timestamp")
-        .def_readwrite("node_id", &SimEvent::node_id, "Node identifier")
-        .def_readwrite("timestamp", &SimEvent::ts, "Event timing info");
+        .def_readwrite("node_id", &Event::node_id, "Node identifier")
+        .def_readwrite("timestamp", &Event::ts, "Event timing info");
 
-    // SimActivity
-    py::class_<SimActivity>(m, "SimActivity")
+    // Activity
+    py::class_<Activity>(m, "Activity")
         .def(py::init<double, int>(), py::arg("minimal_duration"), py::arg("activity_type"),
              "An activity (edge) with base duration and type")
-        .def_readwrite("minimal_duration", &SimActivity::duration, "Base duration")
-        .def_readwrite("activity_type", &SimActivity::activity_type, "Type ID for delay dist.");
+        .def_readwrite("minimal_duration", &Activity::duration, "Base duration")
+        .def_readwrite("activity_type", &Activity::activity_type, "Type ID for delay dist.");
 
-    // SimContext
-    py::class_<SimContext>(m, "SimContext")
-        .def(py::init<vector<SimEvent>, unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, SimActivity>>,
+    // DagContext
+    py::class_<DagContext>(m, "DagContext")
+        .def(py::init<vector<Event>, unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, Activity>>,
                       vector<pair<NodeIndex, Preds>>, double>(),
              py::arg("events"), py::arg("activities"), py::arg("precedence_list"), py::arg("max_delay"),
              "Wraps a DAG: events, activity_map, precedence_list, max_delay")
-        .def_readwrite("events", &SimContext::events)
-        .def_readwrite("activities", &SimContext::activity_map)
-        .def_readwrite("precedence_list", &SimContext::precedence_list)
-        .def_readwrite("max_delay", &SimContext::max_delay);
+        .def_readwrite("events", &DagContext::events)
+        .def_readwrite("activities", &DagContext::activity_map)
+        .def_readwrite("precedence_list", &DagContext::precedence_list)
+        .def_readwrite("max_delay", &DagContext::max_delay);
 
     // SimResult // SimResult → return NumPy arrays instead of lists
     py::class_<SimResult>(m, "SimResult", py::buffer_protocol())
@@ -444,7 +444,7 @@ PYBIND11_MODULE(_core, m) {
 
     // Simulator
     py::class_<Simulator>(m, "Simulator")
-        .def(py::init<SimContext, GenericDelayGenerator>(), py::arg("context"), py::arg("generator"),
+        .def(py::init<DagContext, GenericDelayGenerator>(), py::arg("context"), py::arg("generator"),
              "Construct simulator with context and delay‐generator")
         .def("node_count", &Simulator::node_count, "Number of events")
         .def("activity_count", &Simulator::activity_count, "Number of links")
