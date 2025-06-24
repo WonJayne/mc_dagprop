@@ -203,7 +203,18 @@ Configurable delay factory (one distribution per `activity_type`):
 ## Analytic Propagator
 
 You can propagate discrete delay distributions analytically using `AnalyticPropagator`.
-Define per-edge probability mass functions and build an `AnalyticContext`:
+Define per-edge probability mass functions and build an `AnalyticContext`.
+For example, a delay following an exponential distribution with mean `10` seconds
+truncated to the range `[0, 300]` on a one-second grid can be generated with
+`exponential_pmf`:
+
+```python
+from mc_dagprop.analytic import exponential_pmf
+
+delay_pmf = exponential_pmf(scale=10.0, step=1.0, start=0.0, stop=300.0)
+```
+
+You can then use this PMF in the context definition:
 
 ```python
 from mc_dagprop import (
@@ -218,7 +229,7 @@ events = (
   Event("A", EventTimestamp(0, 10, 0)),
   Event("B", EventTimestamp(0, 10, 0)),
 )
-activities = {(0, 1): (0, DiscretePMF([1.0, 2.0], [0.5, 0.5], step=1.0))}
+activities = {(0, 1): (0, delay_pmf)}
 precedence = (
   (1, ((0, 0),)),
 )
