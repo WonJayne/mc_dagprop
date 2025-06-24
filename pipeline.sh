@@ -13,6 +13,5 @@ cp "$BUILD_LIB_DIR/mc_dagprop/monte_carlo/"*_core*.so mc_dagprop/monte_carlo/
 
 pip install dist/mc_dagprop*.whl --force-reinstall
 
-cd test
-python -m unittest discover -s . -p "test_*.py"
+python -m unittest discover -s test
 

@@ -19,5 +19,4 @@ for %%f in (dist\*.whl) do (
 
 call python -m mc_dagprop.demo.distribution || exit /b
 
-cd test
-python -m unittest discover -s . -p "test_*.py" || exit /b
+python -m unittest discover -s test || exit /b
