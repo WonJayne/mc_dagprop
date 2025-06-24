@@ -57,18 +57,13 @@ class TestDelayDistributions(BaseContextMixin, unittest.TestCase):
 
 class TestErrorConditions(BaseContextMixin, unittest.TestCase):
     def test_cycle_detection(self) -> None:
-        events = [
-            Event("0", EventTimestamp(0.0, 100.0, 0.0)),
-            Event("1", EventTimestamp(0.0, 100.0, 0.0)),
-        ]
+        events = [Event("0", EventTimestamp(0.0, 100.0, 0.0)), Event("1", EventTimestamp(0.0, 100.0, 0.0))]
         activities = {
             (0, 1): Activity(idx=0, minimal_duration=1.0, activity_type=1),
             (1, 0): Activity(idx=1, minimal_duration=1.0, activity_type=1),
         }
         precedence = [(1, [(0, 0)]), (0, [(1, 1)])]
-        context = DagContext(
-            events=events, activities=activities, precedence_list=precedence, max_delay=5.0
-        )
+        context = DagContext(events=events, activities=activities, precedence_list=precedence, max_delay=5.0)
         gen = GenericDelayGenerator()
         gen.add_constant(1, 0.0)
         with self.assertRaises(RuntimeError):

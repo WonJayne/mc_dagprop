@@ -27,17 +27,16 @@ def build_mc_simulator(context_cfg: ExampleConfig, max_delay: Second) -> Simulat
     activities: dict[tuple[EventIndex, EventIndex], Activity] = {}
     generator = GenericDelayGenerator()
 
-    for (src, dst),( _, edge) in analytic_ctx.activities.items():
+    for (src, dst), (_, edge) in analytic_ctx.activities.items():
         edge_idx = edge.idx
-        activities[(src, dst)] = Activity(idx=edge_idx, minimal_duration=Second(0.0), activity_type=ActivityType(edge_idx))
+        activities[(src, dst)] = Activity(
+            idx=edge_idx, minimal_duration=Second(0.0), activity_type=ActivityType(edge_idx)
+        )
         pmf = edge.pmf
         generator.add_empirical_absolute(ActivityType(edge_idx), pmf.values.tolist(), pmf.probabilities.tolist())
 
     mc_ctx = DagContext(
-        events=events,
-        activities=activities,
-        precedence_list=analytic_ctx.precedence_list,
-        max_delay=max_delay,
+        events=events, activities=activities, precedence_list=analytic_ctx.precedence_list, max_delay=max_delay
     )
 
     return Simulator(mc_ctx, generator)

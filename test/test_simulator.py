@@ -175,10 +175,7 @@ class TestSimulator(unittest.TestCase):
 class LargeScaleTest(unittest.TestCase):
     def setUp(self) -> None:
         self.events = [Event(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(10_000)]
-        self.link_map = {
-            (i, i + 1): Activity(idx=i, minimal_duration=3.0, activity_type=1)
-            for i in range(9999)
-        }
+        self.link_map = {(i, i + 1): Activity(idx=i, minimal_duration=3.0, activity_type=1) for i in range(9999)}
         self.precedence_list = [(i, [(i - 1, i)]) for i in range(1, 10_000)]
         self.context = DagContext(
             events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0

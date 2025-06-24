@@ -64,9 +64,6 @@ setup(
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
     zip_safe=False,
-    package_data={
-        "mc_dagprop": ["py.typed"],
-        "mc_dagprop.monte_carlo": ["*.pyi"],
-    },
+    package_data={"mc_dagprop": ["py.typed"], "mc_dagprop.monte_carlo": ["*.pyi"]},
     include_package_data=True,
 )

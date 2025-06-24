@@ -42,16 +42,12 @@ def build_example_context(cfg: ExampleConfig = ExampleConfig()) -> AnalyticConte
         (1, 2): (
             ActivityIndex(1),
             AnalyticActivity(
-                ActivityIndex(1),
-                DiscretePMF(np.array([1.0, 2.0, 3.0]), np.array([1 / 3, 1 / 3, 1 / 3]), step),
+                ActivityIndex(1), DiscretePMF(np.array([1.0, 2.0, 3.0]), np.array([1 / 3, 1 / 3, 1 / 3]), step)
             ),
         ),
         (2, 3): (
             ActivityIndex(2),
-            AnalyticActivity(
-                ActivityIndex(2),
-                DiscretePMF(np.array([1.0, 2.0, 3.0]), np.array([0.2, 0.6, 0.2]), step),
-            ),
+            AnalyticActivity(ActivityIndex(2), DiscretePMF(np.array([1.0, 2.0, 3.0]), np.array([0.2, 0.6, 0.2]), step)),
         ),
         (3, 4): (
             ActivityIndex(3),
@@ -59,34 +55,25 @@ def build_example_context(cfg: ExampleConfig = ExampleConfig()) -> AnalyticConte
         ),
         (4, 5): (
             ActivityIndex(4),
-            AnalyticActivity(
-                ActivityIndex(4), DiscretePMF(np.array([1.0, 2.0]), np.array([0.7, 0.3]), step)
-            ),
+            AnalyticActivity(ActivityIndex(4), DiscretePMF(np.array([1.0, 2.0]), np.array([0.7, 0.3]), step)),
         ),
         (1, 6): (
             ActivityIndex(5),
             AnalyticActivity(
-                ActivityIndex(5),
-                DiscretePMF(np.array([0.0, 1.0, 2.0, 3.0]), np.array([0.4, 0.3, 0.2, 0.1]), step),
+                ActivityIndex(5), DiscretePMF(np.array([0.0, 1.0, 2.0, 3.0]), np.array([0.4, 0.3, 0.2, 0.1]), step)
             ),
         ),
         (6, 7): (
             ActivityIndex(6),
-            AnalyticActivity(
-                ActivityIndex(6), DiscretePMF(np.array([1.0, 2.0, 3.0]), np.array([0.3, 0.5, 0.2]), step)
-            ),
+            AnalyticActivity(ActivityIndex(6), DiscretePMF(np.array([1.0, 2.0, 3.0]), np.array([0.3, 0.5, 0.2]), step)),
         ),
         (7, 5): (
             ActivityIndex(7),
-            AnalyticActivity(
-                ActivityIndex(7), DiscretePMF(np.array([1.0, 3.0, 5.0]), np.array([0.5, 0.3, 0.2]), step)
-            ),
+            AnalyticActivity(ActivityIndex(7), DiscretePMF(np.array([1.0, 3.0, 5.0]), np.array([0.5, 0.3, 0.2]), step)),
         ),
         (2, 8): (
             ActivityIndex(8),
-            AnalyticActivity(
-                ActivityIndex(8), DiscretePMF(np.array([2.0, 4.0]), np.array([0.6, 0.4]), step)
-            ),
+            AnalyticActivity(ActivityIndex(8), DiscretePMF(np.array([2.0, 4.0]), np.array([0.6, 0.4]), step)),
         ),
         (8, 9): (
             ActivityIndex(9),

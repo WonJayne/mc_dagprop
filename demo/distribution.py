@@ -10,10 +10,7 @@ from mc_dagprop.types import ActivityType, ActivityIndex, Second
 
 
 def simulate_and_collect(
-    dist_name: str,
-    params: Mapping[str, float],
-    seeds: Iterable[int],
-    base_duration: Second = 60.0,
+    dist_name: str, params: Mapping[str, float], seeds: Iterable[int], base_duration: Second = 60.0
 ) -> list[float]:
     """Run a Monte Carlo simulation and return realized times."""
 
@@ -28,12 +25,13 @@ def simulate_and_collect(
     elif dist_name == "exponential":
         gen.add_exponential(ActivityType(1), lambda_=params["lambda"], max_scale=params["max_scale"])
     elif dist_name == "gamma":
-        gen.add_gamma(ActivityType(1), shape=params["shape"], scale=params["scale"], max_scale=params.get("max_scale", 1e6))
+        gen.add_gamma(
+            ActivityType(1), shape=params["shape"], scale=params["scale"], max_scale=params.get("max_scale", 1e6)
+        )
     else:
         raise ValueError(dist_name)
 
-    sim = (
-        Simulator(ctx, gen))
+    sim = Simulator(ctx, gen)
     results = sim.run_many(seeds)
     return [res.realized[1] for res in results]
 

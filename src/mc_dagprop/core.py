@@ -5,4 +5,3 @@ from __future__ import annotations
 from .monte_carlo import Activity, DagContext, Event, EventTimestamp
 
 __all__ = ["EventTimestamp", "Event", "Activity", "DagContext"]
-

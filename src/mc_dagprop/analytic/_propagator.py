@@ -191,5 +191,3 @@ class AnalyticPropagator:
         if total_mass > 1.0 and not np.isclose(total_mass, 1.0):
             raise ValueError("Total probability mass exceeds 1.0 after clipping")
         return SimulatedEvent(clipped, under_mass, over_mass)
-
-
