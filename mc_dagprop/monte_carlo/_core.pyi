@@ -12,7 +12,7 @@ class Event(CoreEvent):
     Represents an event (node) with its earliest/latest window and actual timestamp.
     """
 
-    id: EventId
+    event_id: EventId
     timestamp: "EventTimestamp"
 
     def __init__(self, id_: EventId, timestamp: "EventTimestamp") -> None: ...

@@ -11,7 +11,7 @@ def main() -> None:
     results = sim.run()
 
     for sched, result in zip(ctx.events, results):
-        print(f"{sched.id}:")
+        print(f"{sched.event_id}:")
         print(f"  values: {result.pmf.values}")
         print(f"  probs:  {result.pmf.probabilities}")
         print(f"  underflow: {float(result.underflow)} overflow: {float(result.overflow)}\n")

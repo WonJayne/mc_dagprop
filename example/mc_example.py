@@ -26,7 +26,7 @@ def build_mc_simulator(context_cfg: ExampleConfig, max_delay: float) -> Simulato
     """Return a :class:`Simulator` mirroring the analytic example."""
 
     analytic_ctx = build_example_context(context_cfg)
-    events = [Event(ev.id, ev.timestamp) for ev in analytic_ctx.events]
+    events = [Event(ev.event_id, ev.timestamp) for ev in analytic_ctx.events]
 
     activities: dict[tuple[int, int], tuple[int, Activity]] = {}
     generator = GenericDelayGenerator()
@@ -66,7 +66,7 @@ def main() -> None:
     for idx, sched in enumerate(analytic.events):
         values, counts = np.unique(samples[:, idx], return_counts=True)
         probs = counts / cfg.trials
-        print(f"{sched.id}:")
+        print(f"{sched.event_id}:")
         print(f"  values: {values}")
         print(f"  probs:  {probs}")
         print()

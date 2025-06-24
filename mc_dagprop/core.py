@@ -22,7 +22,7 @@ class EventTimestamp:
 class Event:
     """Node with identifier and timing information."""
 
-    id: EventId
+    event_id: EventId
     timestamp: EventTimestamp
 
 
