@@ -27,10 +27,9 @@ class Event:
 
 @dataclass(slots=True, frozen=True)
 class Activity:
-    """Edge definition with minimal duration and type identifier."""
+    """Edge definition with index, minimal duration and type identifier."""
 
-    # FIXME: Add ActivityIndex as property to Activity -> we can clean then a lot up in cpp etc.
-    # index: ActivityIndex
+    idx: ActivityIndex
     minimal_duration: Second
     activity_type: ActivityType
 
@@ -40,7 +39,6 @@ class DagContext:
     """Container describing a DAG for simulation."""
 
     events: Sequence[Event]
-    # FIXME: inline the index of the activity in the activity itself
-    activities: Mapping[tuple[EventIndex, EventIndex], tuple[ActivityIndex, Activity]]
+    activities: Mapping[tuple[EventIndex, EventIndex], Activity]
     precedence_list: Sequence[tuple[EventIndex, Sequence[tuple[EventIndex, ActivityIndex]]]]
     max_delay: Second

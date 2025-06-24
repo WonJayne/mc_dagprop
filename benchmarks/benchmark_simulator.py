@@ -15,7 +15,7 @@ N_NODES = 10_000
 
 def build_context() -> DagContext:
     events = [Event(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(N_NODES)]
-    link_map = {(i, i + 1): (i, Activity(3.0 + random.random(), 1)) for i in range(N_NODES - 1)}
+    link_map = {(i, i + 1): Activity(idx=i, minimal_duration=3.0 + random.random(), activity_type=1) for i in range(N_NODES - 1)}
     precedence_list = [(i, [(i - 1, i)]) for i in range(1, N_NODES)]
     return DagContext(events=events, activities=link_map, precedence_list=precedence_list, max_delay=10.0)
 
