@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
 from mc_dagprop import AnalyticContext, EventTimestamp, Event, DiscretePMF, UnderflowRule, OverflowRule
 from mc_dagprop.analytic import AnalyticActivity
 from mc_dagprop.types import Second, EventId, ActivityIndex, EventIndex
@@ -21,15 +20,15 @@ def build_example_context(cfg: ExampleConfig = ExampleConfig()) -> AnalyticConte
 
     events = (
         Event(EventId("E0"), EventTimestamp(0.0, 0.0, 0.0)),
-        Event(EventId("E1"), EventTimestamp(2.0, 5.0, 3.0)),
-        Event(EventId("E2"), EventTimestamp(4.0, 8.0, 6.0)),
-        Event(EventId("E3"), EventTimestamp(6.0, 11.0, 8.0)),
-        Event(EventId("E4"), EventTimestamp(7.0, 13.0, 9.0)),
-        Event(EventId("E5"), EventTimestamp(10.0, 15.0, 12.0)),
-        Event(EventId("E6"), EventTimestamp(8.0, 12.0, 9.0)),
-        Event(EventId("E7"), EventTimestamp(11.0, 16.0, 13.0)),
-        Event(EventId("E8"), EventTimestamp(12.0, 18.0, 14.0)),
-        Event(EventId("E9"), EventTimestamp(14.0, 20.0, 16.0)),
+        Event(EventId("E1"), EventTimestamp(2.0, 500.0, 3.0)),
+        Event(EventId("E2"), EventTimestamp(4.0, 800.0, 6.0)),
+        Event(EventId("E3"), EventTimestamp(6.0, 1100.0, 8.0)),
+        Event(EventId("E4"), EventTimestamp(7.0, 1300.0, 9.0)),
+        Event(EventId("E5"), EventTimestamp(10.0, 1500.0, 12.0)),
+        Event(EventId("E6"), EventTimestamp(8.0, 1200.0, 9.0)),
+        Event(EventId("E7"), EventTimestamp(11.0, 1600.0, 13.0)),
+        Event(EventId("E8"), EventTimestamp(12.0, 1800.0, 14.0)),
+        Event(EventId("E9"), EventTimestamp(14.0, 2000.0, 16.0)),
     )
 
     step = cfg.step_size
