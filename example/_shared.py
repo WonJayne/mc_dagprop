@@ -11,7 +11,7 @@ from mc_dagprop import (
     UnderflowRule,
     OverflowRule,
 )
-from mc_dagprop.discrete.context import AnalyticEdge
+from mc_dagprop.analytic.context import AnalyticEdge
 
 
 @dataclass(frozen=True)
