@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
 from mc_dagprop.types import ProbabilityMass, Second
 
 
@@ -105,4 +104,3 @@ class DiscretePMF:
         cdf_max = cdf_self * cdf_other
         probs = np.diff(np.concatenate(([0.0], cdf_max)))
         return DiscretePMF(grid, probs, step=self.step)
-

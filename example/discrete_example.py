@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from example._shared import build_example_context
 from mc_dagprop import create_discrete_simulator
-
-from ._shared import ExampleConfig, build_example_context
 
 
 def main() -> None:
@@ -10,8 +9,8 @@ def main() -> None:
     sim = create_discrete_simulator(ctx)
     results = sim.run()
 
-    for sched, result in zip(ctx.events, results):
-        print(f"{sched.event_id}:")
+    for scheduled, result in zip(ctx.events, results):
+        print(f"{scheduled.event_id}:")
         print(f"  values: {result.pmf.values}")
         print(f"  probs:  {result.pmf.probabilities}")
         print(f"  underflow: {float(result.underflow)} overflow: {float(result.overflow)}\n")

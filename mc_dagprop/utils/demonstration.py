@@ -3,14 +3,11 @@ import argparse
 from collections.abc import Iterable, Mapping
 
 import plotly.graph_objects as go
-from mc_dagprop import EventTimestamp, GenericDelayGenerator, Activity, DagContext, Event, Simulator
+from mc_dagprop import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
 
 
 def simulate_and_collect(
-    dist_name: str,
-    params: Mapping[str, float],
-    seeds: Iterable[int],
-    base_duration: float = 60.0,
+    dist_name: str, params: Mapping[str, float], seeds: Iterable[int], base_duration: float = 60.0
 ) -> list[float]:
     """
     Run simulations for a single distribution+parameter set and return the

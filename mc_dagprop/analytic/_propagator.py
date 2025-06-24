@@ -4,16 +4,16 @@ from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
+from mc_dagprop.types import ActivityIndex, EventIndex, ProbabilityMass, Second
 
-from mc_dagprop.types import EdgeIndex, NodeIndex, ProbabilityMass, Second
 from . import OverflowRule, UnderflowRule
-from .context import AnalyticContext, PredecessorTuple, SimulatedEvent, validate_context
-from .pmf import DiscretePMF
+from ._context import AnalyticContext, PredecessorTuple, SimulatedEvent, validate_context
+from ._pmf import DiscretePMF
 
 
 def _build_topology(
     context: AnalyticContext,
-) -> tuple[tuple[tuple[tuple[NodeIndex, EdgeIndex], ...] | None, ...], tuple[NodeIndex, ...]]:
+) -> tuple[tuple[tuple[tuple[EventIndex, ActivityIndex], ...] | None, ...], tuple[EventIndex, ...]]:
     """Return predecessor mapping and topological order for ``context``."""
 
     event_count = len(context.events)
@@ -44,9 +44,7 @@ def _build_topology(
     return tuple(preds_by_target), tuple(order)
 
 
-def create_analytic_propagator(
-    context: AnalyticContext, validate: bool = True
-) -> "AnalyticPropagator":
+def create_analytic_propagator(context: AnalyticContext, validate: bool = True) -> "AnalyticPropagator":
     """Return an :class:`AnalyticPropagator` with topology built for ``context``.
 
     Parameters
@@ -63,11 +61,7 @@ def create_analytic_propagator(
     if validate:
         validate_context(context)
     predecessors, order = _build_topology(context)
-    return AnalyticPropagator(
-        context=context,
-        _predecessors_by_target=predecessors,
-        _topological_node_order=order,
-    )
+    return AnalyticPropagator(context=context, _predecessors_by_target=predecessors, _topological_node_order=order)
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +75,7 @@ class AnalyticPropagator:
 
     context: AnalyticContext
     _predecessors_by_target: tuple[tuple[PredecessorTuple, ...] | None, ...]
-    _topological_node_order: tuple[NodeIndex, ...]
+    _topological_node_order: tuple[EventIndex, ...]
 
     @property
     def underflow_rule(self) -> UnderflowRule:
@@ -111,7 +105,7 @@ class AnalyticPropagator:
             is_origin = predecessors is None
             if is_origin:
                 events[node_index] = SimulatedEvent(
-                    DiscretePMF.delta(ev.timestamp.earliest, self.context.step_size),
+                    DiscretePMF.delta(ev.timestamp.earliest, self.context.step),
                     ProbabilityMass(0.0),
                     ProbabilityMass(0.0),
                 )
@@ -153,9 +147,7 @@ class AnalyticPropagator:
 
         # Move mass below the minimum bound to the bound itself when
         # ``TRUNCATE`` is active and there is mass to relocate.
-        should_truncate_underflow = (
-            self.underflow_rule is UnderflowRule.TRUNCATE and float(under_mass) > 0.0
-        )
+        should_truncate_underflow = self.underflow_rule is UnderflowRule.TRUNCATE and float(under_mass) > 0.0
         if should_truncate_underflow:
             if new_vals.size and np.isclose(new_vals[0], min_value):
                 new_probs[0] += under_mass
@@ -166,9 +158,7 @@ class AnalyticPropagator:
 
         # Move mass above the maximum bound to the bound itself when
         # ``TRUNCATE`` is active and there is mass to relocate.
-        should_truncate_overflow = (
-            self.overflow_rule is OverflowRule.TRUNCATE and float(over_mass) > 0.0
-        )
+        should_truncate_overflow = self.overflow_rule is OverflowRule.TRUNCATE and float(over_mass) > 0.0
         if should_truncate_overflow:
             if new_vals.size and np.isclose(new_vals[-1], max_value):
                 new_probs[-1] += over_mass
@@ -180,16 +170,12 @@ class AnalyticPropagator:
         # Probability mass removed under ``REDISTRIBUTE`` is reallocated
         # proportionally across the remaining distribution.
         to_add = ProbabilityMass(0.0)
-        should_redistribute_underflow = (
-            self.underflow_rule is UnderflowRule.REDISTRIBUTE and under_mass > 0.0
-        )
+        should_redistribute_underflow = self.underflow_rule is UnderflowRule.REDISTRIBUTE and under_mass > 0.0
         if should_redistribute_underflow:
             to_add = under_mass
             under_mass = ProbabilityMass(0.0)
 
-        should_redistribute_overflow = (
-            self.overflow_rule is OverflowRule.REDISTRIBUTE and over_mass > 0.0
-        )
+        should_redistribute_overflow = self.overflow_rule is OverflowRule.REDISTRIBUTE and over_mass > 0.0
         if should_redistribute_overflow:
             to_add += over_mass
             over_mass = ProbabilityMass(0.0)

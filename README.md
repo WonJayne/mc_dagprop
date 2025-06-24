@@ -226,7 +226,7 @@ ctx = AnalyticContext(
     events=events,
     activities=activities,
     precedence_list=precedence,
-    step_size=1.0,
+    step=1.0,
 )
 
 sim = create_analytic_propagator(ctx)

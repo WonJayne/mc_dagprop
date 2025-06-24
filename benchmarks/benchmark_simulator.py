@@ -7,7 +7,7 @@ import random
 import time
 from collections.abc import Iterable
 
-from mc_dagprop import EventTimestamp, GenericDelayGenerator, Activity, DagContext, Event, Simulator
+from mc_dagprop import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
 
 # Use a reasonably large graph similar to the one used in the tests
 N_NODES = 10_000

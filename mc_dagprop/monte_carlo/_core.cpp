@@ -17,9 +17,9 @@ namespace py = pybind11;
 using namespace std;
 
 // ── Aliases ───────────────────────────────────────────────────────────────
-using NodeIndex = int;
-using EdgeIndex = int;
-using Preds = vector<pair<NodeIndex, EdgeIndex>>;
+using EventIndex = int;
+using ActivityIndex = int;
+using Preds = vector<pair<EventIndex, ActivityIndex>>;
 using RNG = utl::random::generators::Xoshiro256PP;
 
 // ── Hash for pair<int,int> ────────────────────────────────────────────────
@@ -36,7 +36,7 @@ struct EventTimestamp {
 };
 
 struct Event {
-    std::string node_id;
+    std::string event_id;
     EventTimestamp ts;
 };
 
@@ -49,12 +49,12 @@ struct Activity {
 struct DagContext {
     vector<Event> events;
     // user provides link_index + Activity
-    unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, Activity>> activity_map;
-    vector<pair<NodeIndex, Preds>> precedence_list;
+    unordered_map<pair<EventIndex, EventIndex>, pair<ActivityIndex, Activity>> activity_map;
+    vector<pair<EventIndex, Preds>> precedence_list;
     double max_delay;
 
-    DagContext(vector<Event> ev, unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, Activity>> am,
-               vector<pair<NodeIndex, Preds>> pl, double md)
+    DagContext(vector<Event> ev, unordered_map<pair<EventIndex, EventIndex>, pair<ActivityIndex, Activity>> am,
+               vector<pair<EventIndex, Preds>> pl, double md)
         : events(move(ev)), activity_map(move(am)), precedence_list(move(pl)), max_delay(md) {}
 };
 
@@ -62,7 +62,7 @@ struct DagContext {
 struct SimResult {
     vector<double> realized;
     vector<double> durations;
-    vector<NodeIndex> cause_event;
+    vector<EventIndex> cause_event;
 };
 
 // ── Delay Distributions ──────────────────────────────────────────────────
@@ -168,10 +168,10 @@ class Simulator {
     std::vector<int> activity_to_dist_index_;  // -1 = no delay
 
     // Precedence (CSR format)
-    std::vector<NodeIndex> flat_predecessor_sources_;  // all predecessor node indices
-    std::vector<EdgeIndex> flat_predecessor_edges_;    // corresponding edge indices
+    std::vector<EventIndex> flat_predecessor_sources_;  // all predecessor node indices
+    std::vector<ActivityIndex> flat_predecessor_edges_;    // corresponding edge indices
     std::vector<size_t> predecessor_offsets_;         // prefix offsets per event
-    std::vector<NodeIndex> event_evaluation_order_;    // order in which to process events
+    std::vector<EventIndex> event_evaluation_order_;    // order in which to process events
 
     // RNG
     RNG rng_;
@@ -184,7 +184,7 @@ class Simulator {
     std::vector<double> earliest_times_;
     std::vector<double> actual_durations_;
     std::vector<double> realized_times_;
-    std::vector<NodeIndex> causing_event_index_;
+    std::vector<EventIndex> causing_event_index_;
 
 public:
     Simulator(DagContext context, GenericDelayGenerator generator)
@@ -213,7 +213,7 @@ public:
         activity_to_dist_index_.assign(link_count, -1);
 
         for (auto &kv : context_.activity_map) {
-            EdgeIndex link_idx = kv.second.first;
+            ActivityIndex link_idx = kv.second.first;
             activities_[link_idx] = kv.second.second;
             auto it = activity_type_to_dist_index_.find(activities_[link_idx].activity_type);
             if (it != activity_type_to_dist_index_.end()) {
@@ -225,11 +225,11 @@ public:
         int event_count = int(context_.events.size());
 
         // build adjacency list and indegree counters
-        std::vector<std::vector<NodeIndex>> adjacency(event_count);
+        std::vector<std::vector<EventIndex>> adjacency(event_count);
         std::vector<Preds> preds_by_target(event_count);
         std::vector<int> indegree(event_count, 0);
         for (auto &entry : context_.precedence_list) {
-            NodeIndex tgt = entry.first;
+            EventIndex tgt = entry.first;
             preds_by_target[tgt] = entry.second;
             indegree[tgt] = int(entry.second.size());
             for (auto &pr : entry.second) {
@@ -240,15 +240,15 @@ public:
         // Kahn's algorithm for topological sorting
         event_evaluation_order_.clear();
         event_evaluation_order_.reserve(event_count);
-        std::deque<NodeIndex> q;
+        std::deque<EventIndex> q;
         for (int i = 0; i < event_count; ++i) {
             if (indegree[i] == 0) q.push_back(i);
         }
         while (!q.empty()) {
-            NodeIndex n = q.front();
+            EventIndex n = q.front();
             q.pop_front();
             event_evaluation_order_.push_back(n);
-            for (NodeIndex dst : adjacency[n]) {
+            for (EventIndex dst : adjacency[n]) {
                 if (--indegree[dst] == 0) q.push_back(dst);
             }
         }
@@ -269,7 +269,7 @@ public:
         flat_predecessor_edges_.resize(total_predecessors);
 
         std::vector<size_t> write_positions = predecessor_offsets_;
-        for (NodeIndex event_id : event_evaluation_order_) {
+        for (EventIndex event_id : event_evaluation_order_) {
             for (auto &pr : preds_by_target[event_id]) {
                 size_t idx = write_positions[event_id]++;
                 flat_predecessor_sources_[idx] = pr.first;
@@ -322,12 +322,12 @@ public:
         }
 
         // Propagate events
-        for (NodeIndex event_id : event_evaluation_order_) {
+        for (EventIndex event_id : event_evaluation_order_) {
             double latest = realized_times_[event_id];
-            NodeIndex cause = -1;
+            EventIndex cause = -1;
             for (size_t idx = predecessor_offsets_[event_id]; idx < predecessor_offsets_[event_id + 1]; ++idx) {
-                NodeIndex src = flat_predecessor_sources_[idx];
-                EdgeIndex edge = flat_predecessor_edges_[idx];
+                EventIndex src = flat_predecessor_sources_[idx];
+                ActivityIndex edge = flat_predecessor_edges_[idx];
                 double t = realized_times_[src] + actual_durations_[edge];
                 if (t >= latest) {
                     latest = t;
@@ -365,9 +365,9 @@ PYBIND11_MODULE(_core, m) {
 
     // Event
     py::class_<Event>(m, "Event")
-        .def(py::init<std::string, EventTimestamp>(), py::arg("node_id"), py::arg("timestamp"),
+        .def(py::init<std::string, EventTimestamp>(), py::arg("event_id"), py::arg("timestamp"),
              "An event node with its ID and timestamp")
-        .def_readwrite("node_id", &Event::node_id, "Node identifier")
+        .def_readwrite("event_id", &Event::event_id, "Node identifier")
         .def_readwrite("timestamp", &Event::ts, "Event timing info");
 
     // Activity
@@ -379,8 +379,8 @@ PYBIND11_MODULE(_core, m) {
 
     // DagContext
     py::class_<DagContext>(m, "DagContext")
-        .def(py::init<vector<Event>, unordered_map<pair<NodeIndex, NodeIndex>, pair<EdgeIndex, Activity>>,
-                      vector<pair<NodeIndex, Preds>>, double>(),
+        .def(py::init<vector<Event>, unordered_map<pair<EventIndex, EventIndex>, pair<ActivityIndex, Activity>>,
+                      vector<pair<EventIndex, Preds>>, double>(),
              py::arg("events"), py::arg("activities"), py::arg("precedence_list"), py::arg("max_delay"),
              "Wraps a DAG: events, activity_map, precedence_list, max_delay")
         .def_readwrite("events", &DagContext::events)

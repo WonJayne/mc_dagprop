@@ -1,11 +1,23 @@
 # mc_dagprop/monte_carlo/_core.pyi
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from mc_dagprop.types import ActivityIndex, ActivityType, EventId, EventIndex, Second
-from mc_dagprop.core import Activity as CoreActivity, DagContext as CoreDagContext, Event as CoreEvent, EventTimestamp
 
+from mc_dagprop.core import Activity as CoreActivity
+from mc_dagprop.core import DagContext as CoreDagContext
+from mc_dagprop.core import Event as CoreEvent
+from mc_dagprop.types import ActivityIndex, ActivityType, EventId, EventIndex, Second
 from numpy._typing import NDArray
 
+class EventTimestamp:
+    """
+    Represents the earliest and latest timestamps of an event, and its actual timestamp.
+    The actual timestamp is the one that is realized during the simulation.
+    """
 
+    earliest: Second
+    latest: Second
+    timestamp: Second
+
+    def __init__(self, earliest: Second, latest: Second, timestamp: Second) -> None: ...
 
 class Event(CoreEvent):
     """
@@ -13,10 +25,9 @@ class Event(CoreEvent):
     """
 
     event_id: EventId
-    timestamp: "EventTimestamp"
+    timestamp: EventTimestamp
 
     def __init__(self, id_: EventId, timestamp: "EventTimestamp") -> None: ...
-
 
 class Activity(CoreActivity):
     """

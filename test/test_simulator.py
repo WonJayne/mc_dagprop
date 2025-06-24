@@ -3,7 +3,8 @@ from concurrent.futures import ThreadPoolExecutor
 from itertools import chain
 
 import numpy as np
-from mc_dagprop import EventTimestamp, GenericDelayGenerator, Activity, DagContext, Event, Simulator
+
+from mc_dagprop import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
 
 
 class TestSimulator(unittest.TestCase):

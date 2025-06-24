@@ -1,29 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import unique, IntEnum
+from enum import IntEnum, unique
 
 import numpy as np
+from mc_dagprop.core import Event
+from mc_dagprop.types import ActivityIndex, EventIndex, ProbabilityMass, Second
 
-from mc_dagprop.core import Event, EventTimestamp
-from mc_dagprop.types import EdgeIndex, NodeIndex, ProbabilityMass, Second
-from .pmf import DiscretePMF
+from ._pmf import DiscretePMF
 
-PredecessorTuple = tuple[NodeIndex, EdgeIndex]
+PredecessorTuple = tuple[EventIndex, ActivityIndex]
 
 
 @dataclass(frozen=True, slots=True)
-class AnalyticEdge:
+class AnalyticActivity:
     """Edge with an associated delay distribution.
 
     Attributes:
         pmf: Probability mass function describing the delay on this edge.
     """
 
-    idx: EdgeIndex
+    idx: ActivityIndex
     pmf: DiscretePMF
-
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,13 +47,13 @@ class AnalyticContext:
         events: Immutable sequence of scheduled events.
         activities: Mapping from (source, target) node pairs to analytic edges.
         precedence_list: List of ``(target, predecessors)`` tuples.
-        step_size: Discrete time step shared by all distributions.
+        step: Discrete time step shared by all distributions.
     """
 
     events: tuple[Event, ...]
-    activities: dict[tuple[NodeIndex, NodeIndex], tuple[EdgeIndex, AnalyticEdge]]
-    precedence_list: tuple[tuple[NodeIndex, tuple[PredecessorTuple, ...]], ...]
-    step_size: Second
+    activities: dict[tuple[EventIndex, EventIndex], tuple[ActivityIndex, AnalyticActivity]]
+    precedence_list: tuple[tuple[EventIndex, tuple[PredecessorTuple, ...]], ...]
+    step: Second
     underflow_rule: UnderflowRule
     overflow_rule: OverflowRule
 
@@ -95,7 +93,7 @@ def validate_context(context: AnalyticContext) -> None:
 
     n_events = len(context.events)
 
-    if context.step_size <= 0.0:
+    if context.step <= 0.0:
         raise ValueError("step_size must be positive")
 
     # Validate scheduled events
@@ -111,11 +109,9 @@ def validate_context(context: AnalyticContext) -> None:
         if not (0 <= src < n_events and 0 <= dst < n_events):
             raise ValueError(f"activity {(src, dst)} references invalid node")
         edge.pmf.validate()
-        if not np.isclose(edge.pmf.step, context.step_size):
-            raise ValueError(
-                f"edge {(src, dst)} step {edge.pmf.step} does not match context step size {context.step_size}"
-            )
-        edge.pmf.validate_alignment(context.step_size)
+        if not np.isclose(edge.pmf.step, context.step):
+            raise ValueError(f"edge {(src, dst)} step {edge.pmf.step} does not match context step size {context.step}")
+        edge.pmf.validate_alignment(context.step)
 
     # Validate precedence list and build topology for cycle check
     from collections import deque
@@ -133,9 +129,7 @@ def validate_context(context: AnalyticContext) -> None:
             if edge is None:
                 raise ValueError(f"missing activity for {(src, target)}")
             if edge[0] != link:
-                raise ValueError(
-                    f"edge index {link} for {(src, target)} does not match context mapping {edge[0]}"
-                )
+                raise ValueError(f"edge index {link} for {(src, target)} does not match context mapping {edge[0]}")
             adjacency[src].append(target)
             indegree[target] += 1
 

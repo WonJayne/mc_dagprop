@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Sequence
-import numpy as np
+from dataclasses import dataclass
 
-from mc_dagprop import (
-    GenericDelayGenerator,
-    Activity,
-    DagContext,
-    Event,
-    Simulator,
-)
-from ._shared import ExampleConfig, build_example_context
+import numpy as np
+from example._shared import ExampleConfig, build_example_context
+from mc_dagprop import Activity, DagContext, Event, GenericDelayGenerator, Simulator
+from mc_dagprop.types import ActivityType, Second
 
 
 @dataclass(frozen=True)
@@ -19,7 +14,7 @@ class MonteCarloConfig(ExampleConfig):
     """Configuration for the Monte Carlo demonstration."""
 
     trials: int = 1000
-    max_delay: float = 20.0
+    max_delay: Second = 1800.0
 
 
 def build_mc_simulator(context_cfg: ExampleConfig, max_delay: float) -> Simulator:
@@ -34,17 +29,10 @@ def build_mc_simulator(context_cfg: ExampleConfig, max_delay: float) -> Simulato
     for (src, dst), (edge_idx, edge) in analytic_ctx.activities.items():
         activities[(src, dst)] = (edge_idx, Activity(0.0, edge_idx))
         pmf = edge.pmf
-        generator.add_empirical_absolute(
-            edge_idx,
-            pmf.values.tolist(),
-            pmf.probabilities.tolist(),
-        )
+        generator.add_empirical_absolute(ActivityType(edge_idx), pmf.values.tolist(), pmf.probabilities.tolist())
 
     mc_ctx = DagContext(
-        events=events,
-        activities=activities,
-        precedence_list=analytic_ctx.precedence_list,
-        max_delay=max_delay,
+        events=events, activities=activities, precedence_list=analytic_ctx.precedence_list, max_delay=max_delay
     )
 
     return Simulator(mc_ctx, generator)

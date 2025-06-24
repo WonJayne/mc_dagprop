@@ -3,15 +3,7 @@
 from importlib.metadata import version
 
 try:
-    from .monte_carlo import (
-        Activity,
-        DagContext,
-        Event,
-        EventTimestamp,
-        GenericDelayGenerator,
-        SimResult,
-        Simulator,
-    )
+    from .monte_carlo import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, SimResult, Simulator
 except ModuleNotFoundError as exc:  # pragma: no cover - compiled module missing
     raise ImportError(
         "mc_dagprop requires the compiled extension 'mc_dagprop.monte_carlo._core'. "
@@ -20,15 +12,14 @@ except ModuleNotFoundError as exc:  # pragma: no cover - compiled module missing
 from .analytic import (
     AnalyticContext,
     AnalyticPropagator,
-    SimulatedEvent,
     DiscretePMF,
-    create_analytic_propagator,
     DiscreteSimulator,
-    create_discrete_simulator,
-    UnderflowRule,
     OverflowRule,
+    SimulatedEvent,
+    UnderflowRule,
+    create_analytic_propagator,
+    create_discrete_simulator,
 )
-
 from .utils.inspection import plot_activity_delays, retrieve_absolute_and_relative_delays
 
 __version__ = version("mc-dagprop")
