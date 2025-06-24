@@ -1,26 +1,27 @@
-#!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
 from collections.abc import Iterable, Mapping
 
 import plotly.graph_objects as go
-from mc_dagprop import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
+
+from .. import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
 
 
 def simulate_and_collect(
-    dist_name: str, params: Mapping[str, float], seeds: Iterable[int], base_duration: float = 60.0
+    dist_name: str,
+    params: Mapping[str, float],
+    seeds: Iterable[int],
+    base_duration: float = 60.0,
 ) -> list[float]:
-    """
-    Run simulations for a single distribution+parameter set and return the
-    realized timestamp of the second (delayed) node.
-    """
-    # simple 2-node DAG: A -> B
+    """Run a Monte Carlo simulation and return realized times."""
+
     events = [Event("A", EventTimestamp(0.0, 0.0, 0.0)), Event("B", EventTimestamp(0.0, 0.0, 0.0))]
     activities = {(0, 1): Activity(idx=0, minimal_duration=base_duration, activity_type=1)}
     precedence = [(1, [(0, 0)])]
     ctx = DagContext(events, activities, precedence, max_delay=1e6)
 
     gen = GenericDelayGenerator()
-    # configure this single activity_type=1 with the requested distribution
     if dist_name == "constant":
         gen.add_constant(1, factor=params["factor"])
     elif dist_name == "exponential":
@@ -32,17 +33,15 @@ def simulate_and_collect(
 
     sim = Simulator(ctx, gen)
     results = sim.run_many(seeds)
-    # extract the realized time of event B (index 1)
     return [res.realized[1] for res in results]
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Demo: compare Constant, Exponential & Gamma delay distributions")
-    parser.add_argument("--trials", type=int, default=10_000, help="number of Monte-Carlo runs per parameter set")
+    parser = argparse.ArgumentParser(description="Compare different delay distributions")
+    parser.add_argument("--trials", type=int, default=10000, help="number of Monte-Carlo runs per parameter set")
     args = parser.parse_args()
-    seeds = tuple(range(args.trials))
 
-    # define multiple parameter sets per distribution
+    seeds = tuple(range(args.trials))
     configs = {
         "constant": [{"factor": 1.0}, {"factor": 2.0}],
         "exponential": [

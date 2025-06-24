@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
+from collections.abc import Sequence
 
 import numpy as np
-from example._shared import ExampleConfig, build_example_context
-from mc_dagprop import Activity, DagContext, Event, GenericDelayGenerator, Simulator
-from mc_dagprop.types import ActivityType, Second
+
+from ._shared import ExampleConfig, build_example_context
+from .. import Activity, DagContext, Event, GenericDelayGenerator, Simulator
+from ..types import ActivityType, Second
 
 
 @dataclass(frozen=True)
@@ -32,7 +33,10 @@ def build_mc_simulator(context_cfg: ExampleConfig, max_delay: float) -> Simulato
         generator.add_empirical_absolute(ActivityType(edge_idx), pmf.values.tolist(), pmf.probabilities.tolist())
 
     mc_ctx = DagContext(
-        events=events, activities=activities, precedence_list=analytic_ctx.precedence_list, max_delay=max_delay
+        events=events,
+        activities=activities,
+        precedence_list=analytic_ctx.precedence_list,
+        max_delay=max_delay,
     )
 
     return Simulator(mc_ctx, generator)
@@ -56,8 +60,7 @@ def main() -> None:
         probs = counts / cfg.trials
         print(f"{sched.event_id}:")
         print(f"  values: {values}")
-        print(f"  probs:  {probs}")
-        print()
+        print(f"  probs:  {probs}\n")
 
 
 if __name__ == "__main__":
