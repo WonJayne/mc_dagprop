@@ -162,9 +162,9 @@ Configurable delay factory (one distribution per `activity_type`):
 - `.durations`:  `NDArray[float]` – per-edge durations (base + extra)  
 - `.cause_event`: `NDArray[int]` – which predecessor caused each event  
 
-## Discrete Simulator
+## Analytic Propagator
 
-You can propagate discrete delay distributions analytically using `DiscreteSimulator`.
+You can propagate discrete delay distributions analytically using `AnalyticPropagator`.
 Define per-edge probability mass functions and build an `AnalyticContext`:
 
 ```python
@@ -173,7 +173,7 @@ from mc_dagprop import (
     DiscretePMF,
     EventTimestamp,
     Event,
-    create_discrete_simulator,
+    create_analytic_propagator,
 )
 
 events = (
@@ -191,14 +191,14 @@ ctx = AnalyticContext(
     step_size=1.0,
 )
 
-sim = create_discrete_simulator(ctx)
+sim = create_analytic_propagator(ctx)
 pmfs = sim.run()
 print(pmfs[1].values, pmfs[1].probs)
 ```
 This computes event-time PMFs deterministically without Monte-Carlo sampling.
 
 The ``step_size`` sets the spacing for all values in the discrete PMFs.
-By default ``create_discrete_simulator()`` calls ``AnalyticContext.validate()``
+By default ``create_analytic_propagator()`` calls ``AnalyticContext.validate()``
 before constructing the simulator and raises an error when any edge uses a
 different step. All PMF value grids must therefore have constant spacing equal
 to ``step_size`` and start on a multiple of that step. Pass ``validate=False``
@@ -207,7 +207,7 @@ Each ``ScheduledEvent`` may specify ``bounds=(lower, upper)`` to clip the
 resulting distribution. Overflow and underflow mass can be truncated to the
 closest bound, removed or redistributed across the remaining range. Control this
 behaviour via the optional ``underflow_rule`` and ``overflow_rule`` arguments of
-``create_discrete_simulator()``. ``TRUNCATE`` places the mass on the bound,
+``create_analytic_propagator()``. ``TRUNCATE`` places the mass on the bound,
 ``REMOVE`` drops it entirely and ``REDISTRIBUTE`` reweights the other values.
 The ``run()`` method returns a sequence of
 ``SimulatedEvent`` objects which hold the resulting PMF and the probability mass

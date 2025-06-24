@@ -10,8 +10,10 @@ except ModuleNotFoundError as exc:  # pragma: no cover - compiled module missing
     ) from exc
 from .analytic import (
     AnalyticContext,
+    AnalyticPropagator,
     SimulatedEvent,
     DiscretePMF,
+    create_analytic_propagator,
     DiscreteSimulator,
     create_discrete_simulator,
     UnderflowRule,
@@ -35,6 +37,8 @@ __all__ = [
     "UnderflowRule",
     "OverflowRule",
     "AnalyticContext",
+    "AnalyticPropagator",
+    "create_analytic_propagator",
     "DiscreteSimulator",
     "create_discrete_simulator",
     "plot_activity_delays",
