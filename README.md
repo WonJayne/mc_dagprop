@@ -17,7 +17,7 @@ the standard library.
 The package provides two event-driven propagation engines. The analytic solver
 implements the approach introduced by Büker and co-authors and its later
 extension.[^1][^2] The Monte Carlo module follows an event-based simulation
-scheme similar to the one described by Corman et al.[^3]
+scheme similar to the one described by De Wilde et al.[^3]
 Both engines share the same Python interface and operate on an identical DAG
 representation.
 
@@ -286,7 +286,7 @@ python benchmarks/benchmark_simulator.py
 [^1]: T. Büker, "Railway Delay Propagation..." (original analytic solver).
 [^2]: Follow-up extension to Büker's method describing the analytic event
     propagation in more detail.
-[^3]: Corman *et al.*, "Improving the robustness in railway station areas,"
+[^3]: S. De Wilde *et al.*, "Improving the robustness in railway station areas,"
     *European Journal of Operational Research*, 2014.
 
 ---
