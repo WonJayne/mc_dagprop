@@ -74,33 +74,33 @@ pip install mc-dagprop
 
 ```python
 from mc_dagprop import (
-    EventTimestamp,
-    Event,
-    Activity,
-    DagContext,
-    GenericDelayGenerator,
-    Simulator,
+  EventTimestamp,
+  Event,
+  Activity,
+  DagContext,
+  GenericDelayGenerator,
+  Simulator,
 )
 
 # 1) Build your DAG timing context
 events = [
-    Event("A", EventTimestamp(0.0, 100.0, 0.0)),
-    Event("B", EventTimestamp(10.0, 100.0, 0.0)),
+  Event("A", EventTimestamp(0.0, 100.0, 0.0)),
+  Event("B", EventTimestamp(10.0, 100.0, 0.0)),
 ]
 
 activities = {
-    (0, 1): Activity(idx=0, minimal_duration=60.0, activity_type=1),
+  (0, 1): Activity(idx=0, minimal_duration=60.0, activity_type=1),
 }
 
 precedence = [
-    (1, [(0, 0)]),
+  (1, [(0, 0)]),
 ]
 
 ctx = DagContext(
-    events=events,
-    activities=activities,
-    precedence_list=precedence,
-    max_delay=1800.0,
+  events=events,
+  activities=activities,
+  precedence_list=precedence,
+  max_delay=1800.0,
 )
 
 # 2) Configure a delay generator (one per activity_type)
@@ -137,7 +137,7 @@ exposes the `AnalyticPropagator`, `DiscreteSimulator` and helper classes.
 Install the package as **mc-dagprop** but import modules from the `mc_dagprop` namespace, e.g.:
 
 ```python
-from mc_dagprop.monte_carlo import Simulator
+from mc_dagprop import Simulator
 ```
 
 ---
@@ -207,26 +207,26 @@ Define per-edge probability mass functions and build an `AnalyticContext`:
 
 ```python
 from mc_dagprop import (
-    AnalyticContext,
-    DiscretePMF,
-    EventTimestamp,
-    Event,
-    create_analytic_propagator,
+  AnalyticContext,
+  DiscretePMF,
+  EventTimestamp,
+  Event,
+  create_analytic_propagator,
 )
 
 events = (
-    Event("A", EventTimestamp(0, 10, 0)),
-    Event("B", EventTimestamp(0, 10, 0)),
+  Event("A", EventTimestamp(0, 10, 0)),
+  Event("B", EventTimestamp(0, 10, 0)),
 )
 activities = {(0, 1): (0, DiscretePMF([1.0, 2.0], [0.5, 0.5], step=1.0))}
 precedence = (
-    (1, ((0, 0),)),
+  (1, ((0, 0),)),
 )
 ctx = AnalyticContext(
-    events=events,
-    activities=activities,
-    precedence_list=precedence,
-    step=1.0,
+  events=events,
+  activities=activities,
+  precedence_list=precedence,
+  step=1.0,
 )
 
 sim = create_analytic_propagator(ctx)
@@ -261,7 +261,7 @@ roughly from ``-180`` s up to ``+1800`` s.
 
 ```bash
 pip install mc-dagprop[plot]
-python -m mc_dagprop.demo.distribution
+python demo/distribution.py
 ```
 
 Displays histograms of realized times and delays.

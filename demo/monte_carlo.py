@@ -5,9 +5,9 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ._shared import ExampleConfig, build_example_context
-from .. import Activity, DagContext, Event, GenericDelayGenerator, Simulator
-from ..types import ActivityType, Second
+from demo._shared import ExampleConfig, build_example_context
+from mc_dagprop import Simulator, Event, Activity, GenericDelayGenerator, DagContext
+from mc_dagprop.types import Second, ActivityType, EventIndex
 
 
 @dataclass(frozen=True)
@@ -18,17 +18,18 @@ class MonteCarloConfig(ExampleConfig):
     max_delay: Second = 1800.0
 
 
-def build_mc_simulator(context_cfg: ExampleConfig, max_delay: float) -> Simulator:
+def build_mc_simulator(context_cfg: ExampleConfig, max_delay: Second) -> Simulator:
     """Return a :class:`Simulator` mirroring the analytic example."""
 
     analytic_ctx = build_example_context(context_cfg)
     events = [Event(ev.event_id, ev.timestamp) for ev in analytic_ctx.events]
 
-    activities: dict[tuple[int, int], Activity] = {}
+    activities: dict[tuple[EventIndex, EventIndex], Activity] = {}
     generator = GenericDelayGenerator()
 
-    for (src, dst), (edge_idx, edge) in analytic_ctx.activities.items():
-        activities[(src, dst)] = Activity(idx=edge_idx, minimal_duration=0.0, activity_type=edge_idx)
+    for (src, dst),( _, edge) in analytic_ctx.activities.items():
+        edge_idx = edge.idx
+        activities[(src, dst)] = Activity(idx=edge_idx, minimal_duration=Second(0.0), activity_type=ActivityType(edge_idx))
         pmf = edge.pmf
         generator.add_empirical_absolute(ActivityType(edge_idx), pmf.values.tolist(), pmf.probabilities.tolist())
 
@@ -55,10 +56,10 @@ def main() -> None:
     samples = run_trials(sim, range(cfg.trials))
     analytic = build_example_context(cfg)
 
-    for idx, sched in enumerate(analytic.events):
+    for idx, scheduled in enumerate(analytic.events):
         values, counts = np.unique(samples[:, idx], return_counts=True)
         probs = counts / cfg.trials
-        print(f"{sched.event_id}:")
+        print(f"{scheduled.event_id}:")
         print(f"  values: {values}")
         print(f"  probs:  {probs}\n")
 

@@ -193,6 +193,3 @@ class AnalyticPropagator:
         return SimulatedEvent(clipped, under_mass, over_mass)
 
 
-# Backward compatibility
-DiscreteSimulator = AnalyticPropagator
-create_discrete_simulator = create_analytic_propagator

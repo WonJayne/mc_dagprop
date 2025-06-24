@@ -46,8 +46,8 @@ else:
 ext_modules = [
     Extension(
         "mc_dagprop.monte_carlo._core",
-        sources=["mc_dagprop/monte_carlo/_core.cpp"],
-        include_dirs=[GetPybindInclude(), "mc_dagprop/monte_carlo"],
+        sources=["src/mc_dagprop/monte_carlo/_core.cpp"],
+        include_dirs=[GetPybindInclude(), "src/mc_dagprop/monte_carlo"],
         language="c++",
         extra_compile_args=platform_compile_args,
         extra_link_args=platform_linker_args,
@@ -59,10 +59,14 @@ setup(
     version=version,
     author="Florian Flükiger",
     description="Fast, Simple, Monte Carlo DAG propagation simulator with user-defined delay distributions.",
-    packages=find_packages(include=["mc_dagprop*"]),
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
     ext_modules=ext_modules,
     cmdclass={"build_ext": build_ext},
     zip_safe=False,
-    package_data={"mc_dagprop": ["py.typed"], "mc_dagprop.monte_carlo": ["*.pyi"]},
+    package_data={
+        "mc_dagprop": ["py.typed"],
+        "mc_dagprop.monte_carlo": ["*.pyi"],
+    },
     include_package_data=True,
 )

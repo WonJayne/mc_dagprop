@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .. import AnalyticContext, Event, EventTimestamp
-from ..analytic import AnalyticActivity, DiscretePMF, OverflowRule, UnderflowRule
-from ..types import ActivityIndex, EventId, EventIndex, Second
+from mc_dagprop import AnalyticContext, EventTimestamp, Event, DiscretePMF, UnderflowRule, OverflowRule
+from mc_dagprop.analytic import AnalyticActivity
+from mc_dagprop.types import Second, EventId, ActivityIndex, EventIndex
 
 
 @dataclass(frozen=True)

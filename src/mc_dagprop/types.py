@@ -7,7 +7,6 @@ __all__ = ["Second", "ProbabilityMass", "ActivityIndex", "EventIndex", "Activity
 Second = NewType("Second", float)
 ProbabilityMass = NewType("ProbabilityMass", float)
 
-# Index of an activity (edge) in the DAG.
 ActivityIndex = NewType("ActivityIndex", int)
 EventIndex = NewType("EventIndex", int)
 ActivityType = NewType("ActivityType", int)

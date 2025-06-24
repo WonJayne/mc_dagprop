@@ -5,33 +5,35 @@ from collections.abc import Iterable, Mapping
 
 import plotly.graph_objects as go
 
-from .. import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
+from mc_dagprop import Event, EventTimestamp, Activity, DagContext, GenericDelayGenerator, Simulator
+from mc_dagprop.types import ActivityType, ActivityIndex, Second
 
 
 def simulate_and_collect(
     dist_name: str,
     params: Mapping[str, float],
     seeds: Iterable[int],
-    base_duration: float = 60.0,
+    base_duration: Second = 60.0,
 ) -> list[float]:
     """Run a Monte Carlo simulation and return realized times."""
 
     events = [Event("A", EventTimestamp(0.0, 0.0, 0.0)), Event("B", EventTimestamp(0.0, 0.0, 0.0))]
-    activities = {(0, 1): Activity(idx=0, minimal_duration=base_duration, activity_type=1)}
+    activities = {(0, 1): Activity(idx=ActivityIndex(0), minimal_duration=base_duration, activity_type=ActivityType(1))}
     precedence = [(1, [(0, 0)])]
     ctx = DagContext(events, activities, precedence, max_delay=1e6)
 
     gen = GenericDelayGenerator()
     if dist_name == "constant":
-        gen.add_constant(1, factor=params["factor"])
+        gen.add_constant(ActivityType(1), factor=params["factor"])
     elif dist_name == "exponential":
-        gen.add_exponential(1, lambda_=params["lambda"], max_scale=params["max_scale"])
+        gen.add_exponential(ActivityType(1), lambda_=params["lambda"], max_scale=params["max_scale"])
     elif dist_name == "gamma":
-        gen.add_gamma(1, shape=params["shape"], scale=params["scale"], max_scale=params.get("max_scale", 1e6))
+        gen.add_gamma(ActivityType(1), shape=params["shape"], scale=params["scale"], max_scale=params.get("max_scale", 1e6))
     else:
         raise ValueError(dist_name)
 
-    sim = Simulator(ctx, gen)
+    sim = (
+        Simulator(ctx, gen))
     results = sim.run_many(seeds)
     return [res.realized[1] for res in results]
 

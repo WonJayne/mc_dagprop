@@ -53,7 +53,7 @@ class DagContext:
         self,
         events: Sequence[Event],
         activities: Mapping[tuple[EventIndex, EventIndex], Activity],
-        precedence_list: Sequence[tuple[EventIndex, list[tuple[EventIndex, ActivityIndex]]]],
+        precedence_list: Sequence[tuple[EventIndex, Sequence[tuple[EventIndex, ActivityIndex]]]],
         max_delay: Second,
     ) -> None: ...
 

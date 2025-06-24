@@ -1,7 +1,6 @@
-from __future__ import annotations
+from demo._shared import build_example_context, ExampleConfig
 
-from ._shared import ExampleConfig, build_example_context
-from .. import create_discrete_simulator
+from mc_dagprop import create_discrete_simulator
 
 
 def main() -> None:

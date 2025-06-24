@@ -13,14 +13,11 @@ from .analytic import (
     AnalyticContext,
     AnalyticPropagator,
     DiscretePMF,
-    DiscreteSimulator,
     OverflowRule,
     SimulatedEvent,
     UnderflowRule,
     create_analytic_propagator,
-    create_discrete_simulator,
 )
-from .utils.inspection import plot_activity_delays, retrieve_absolute_and_relative_delays
 
 __version__ = version("mc-dagprop")
 
@@ -39,9 +36,5 @@ __all__ = [
     "AnalyticContext",
     "AnalyticPropagator",
     "create_analytic_propagator",
-    "DiscreteSimulator",
-    "create_discrete_simulator",
-    "plot_activity_delays",
-    "retrieve_absolute_and_relative_delays",
     "__version__",
 ]
