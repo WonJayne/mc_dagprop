@@ -9,5 +9,7 @@ poetry build
 
 pip install dist/mc_dagprop*.whl --force-reinstall
 
+python -m demo.analytic
+
 python -m unittest discover -s test
 

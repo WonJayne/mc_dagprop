@@ -14,5 +14,6 @@ for %%f in (dist\*.whl) do (
 )
 
 call python demo/distribution.py || exit /b
+call python -m demo.analytic || exit /b
 
 python -m unittest discover -s test || exit /b

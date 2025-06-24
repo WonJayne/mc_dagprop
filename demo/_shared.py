@@ -68,11 +68,25 @@ def build_example_context(cfg: ExampleConfig = ExampleConfig()) -> AnalyticConte
         ),
         (7, 5): (
             ActivityIndex(7),
-            AnalyticActivity(ActivityIndex(7), DiscretePMF(np.array([1.0, 3.0, 5.0]), np.array([0.5, 0.3, 0.2]), step)),
+            AnalyticActivity(
+                ActivityIndex(7),
+                DiscretePMF(
+                    np.array([1.0, 2.0, 3.0, 4.0, 5.0]),
+                    np.array([0.5, 0.0, 0.3, 0.0, 0.2]),
+                    step,
+                ),
+            ),
         ),
         (2, 8): (
             ActivityIndex(8),
-            AnalyticActivity(ActivityIndex(8), DiscretePMF(np.array([2.0, 4.0]), np.array([0.6, 0.4]), step)),
+            AnalyticActivity(
+                ActivityIndex(8),
+                DiscretePMF(
+                    np.array([2.0, 3.0, 4.0]),
+                    np.array([0.6, 0.0, 0.4]),
+                    step,
+                ),
+            ),
         ),
         (8, 9): (
             ActivityIndex(9),
