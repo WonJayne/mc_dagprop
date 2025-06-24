@@ -34,10 +34,11 @@ class Activity(CoreActivity):
     Represents an activity (edge) in the DAG, with its minimal duration and type.
     """
 
+    idx: ActivityIndex
     minimal_duration: Second
     activity_type: ActivityType
 
-    def __init__(self, minimal_duration: Second, activity_type: ActivityType) -> None: ...
+    def __init__(self, idx: ActivityIndex, minimal_duration: Second, activity_type: ActivityType) -> None: ...
 
 class DagContext(CoreDagContext):
     """
@@ -47,14 +48,14 @@ class DagContext(CoreDagContext):
     """
 
     events: Sequence[Event]
-    activities: Mapping[tuple[EventIndex, EventIndex], tuple[ActivityIndex, Activity]]
+    activities: Mapping[tuple[EventIndex, EventIndex], Activity]
     precedence_list: Sequence[tuple[EventIndex, list[tuple[EventIndex, ActivityIndex]]]]
     max_delay: Second
 
     def __init__(
         self,
         events: Sequence[Event],
-        activities: Mapping[tuple[EventIndex, EventIndex], tuple[ActivityIndex, Activity]],
+        activities: Mapping[tuple[EventIndex, EventIndex], Activity],
         precedence_list: Sequence[tuple[EventIndex, list[tuple[EventIndex, ActivityIndex]]]],
         max_delay: Second,
     ) -> None: ...

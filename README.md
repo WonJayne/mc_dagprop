@@ -89,7 +89,7 @@ events = [
 ]
 
 activities = {
-    (0, 1): (0, Activity(minimal_duration=60.0, activity_type=1)),
+    (0, 1): Activity(idx=0, minimal_duration=60.0, activity_type=1),
 }
 
 precedence = [
@@ -160,19 +160,20 @@ Wraps a DAG node with:
 - `id`        – string key for the node  
 - `timestamp` – an `EventTimestamp` instance  
 
-### `Activity(minimal_duration: float, activity_type: int)`
+### `Activity(idx: int, minimal_duration: float, activity_type: int)`
 
 Represents an edge in the DAG:
 
-- `minimal_duration` – minimal (base) duration  
-- `activity_type`    – integer type identifier  
+- `idx`              – unique edge index
+- `minimal_duration` – minimal (base) duration
+- `activity_type`    – integer type identifier
 
 ### `DagContext(events, activities, precedence_list, max_delay)`
 
 Container for your DAG:
 
 - `events`:          `list[Event]`
-- `activities`:      `dict[(src_idx, dst_idx), (link_idx, Activity)]`
+- `activities`:      `dict[(src_idx, dst_idx), Activity]`
 - `precedence_list`: `list[(target_idx, [(pred_idx, link_idx), …])]`
 - `max_delay`:       overall cap on delay propagation
   - Can be given in any order. `Simulator` will sort topologically and raise

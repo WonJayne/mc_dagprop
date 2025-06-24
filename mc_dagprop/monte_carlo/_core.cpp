@@ -19,6 +19,8 @@ using namespace std;
 // ── Aliases ───────────────────────────────────────────────────────────────
 using EventIndex = int;
 using ActivityIndex = int;
+using ActivityType = int;
+using Second = double;
 using Preds = vector<pair<EventIndex, ActivityIndex>>;
 using RNG = utl::random::generators::Xoshiro256PP;
 
@@ -41,19 +43,20 @@ struct Event {
 };
 
 struct Activity {
-    double duration;
-    int activity_type;
+    ActivityIndex idx;
+    Second duration;
+    ActivityType activity_type;
 };
 
 // ── Simulation Context ───────────────────────────────────────────────────
 struct DagContext {
     vector<Event> events;
-    // user provides link_index + Activity
-    unordered_map<pair<EventIndex, EventIndex>, pair<ActivityIndex, Activity>> activity_map;
+    // user provides Activity with idx property
+    unordered_map<pair<EventIndex, EventIndex>, Activity> activity_map;
     vector<pair<EventIndex, Preds>> precedence_list;
     double max_delay;
 
-    DagContext(vector<Event> ev, unordered_map<pair<EventIndex, EventIndex>, pair<ActivityIndex, Activity>> am,
+    DagContext(vector<Event> ev, unordered_map<pair<EventIndex, EventIndex>, Activity> am,
                vector<pair<EventIndex, Preds>> pl, double md)
         : events(move(ev)), activity_map(move(am)), precedence_list(move(pl)), max_delay(md) {}
 };
@@ -143,14 +146,14 @@ using DistVar = std::variant<ConstantDist, ExponentialDist, GammaDist, Empirical
 class GenericDelayGenerator {
    public:
     RNG rng_;
-    unordered_map<int, DistVar> dist_map_;
+    unordered_map<ActivityType, DistVar> dist_map_;
 
     GenericDelayGenerator() : rng_(random_device{}()) {}
 
     void set_seed(int s) { rng_.seed(s); }
-    void add_constant(int t, double f) { dist_map_[t] = ConstantDist{f}; }
-    void add_exponential(int t, double lam, double mx) { dist_map_[t] = ExponentialDist{lam, mx}; }
-    void add_gamma(int t, double k, double s, double m = numeric_limits<double>::infinity()) {
+    void add_constant(ActivityType t, double f) { dist_map_[t] = ConstantDist{f}; }
+    void add_exponential(ActivityType t, double lam, double mx) { dist_map_[t] = ExponentialDist{lam, mx}; }
+    void add_gamma(ActivityType t, double k, double s, double m = numeric_limits<double>::infinity()) {
         dist_map_[t] = GammaDist{k, s, m};
     }
 };
@@ -161,7 +164,7 @@ class Simulator {
 
     // Delay distributions (flattened)
     std::vector<DistVar> delay_distributions_;
-    std::unordered_map<int, int> activity_type_to_dist_index_;
+    std::unordered_map<ActivityType, int> activity_type_to_dist_index_;
 
     // Activities: one per link index
     std::vector<Activity> activities_;
@@ -206,16 +209,17 @@ public:
         // 2) Allocate activities and map each link to a distribution index
         int max_link_index = -1;
         for (auto &kv : context_.activity_map) {
-            max_link_index = std::max(max_link_index, kv.second.first);
+            max_link_index = std::max(max_link_index, kv.second.idx);
         }
         int link_count = max_link_index + 1;
-        activities_.assign(link_count, Activity{0.0, -1});
+        activities_.assign(link_count, Activity{ActivityIndex(-1), Second(0.0), ActivityType(-1)});
         activity_to_dist_index_.assign(link_count, -1);
 
         for (auto &kv : context_.activity_map) {
-            ActivityIndex link_idx = kv.second.first;
-            activities_[link_idx] = kv.second.second;
-            auto it = activity_type_to_dist_index_.find(activities_[link_idx].activity_type);
+            const Activity &edge = kv.second;
+            ActivityIndex link_idx = edge.idx;
+            activities_[link_idx] = edge;
+            auto it = activity_type_to_dist_index_.find(edge.activity_type);
             if (it != activity_type_to_dist_index_.end()) {
                 activity_to_dist_index_[link_idx] = it->second;
             }
@@ -372,14 +376,19 @@ PYBIND11_MODULE(_core, m) {
 
     // Activity
     py::class_<Activity>(m, "Activity")
-        .def(py::init<double, int>(), py::arg("minimal_duration"), py::arg("activity_type"),
-             "An activity (edge) with base duration and type")
+        .def(
+            py::init<ActivityIndex, Second, ActivityType>(),
+             py::arg("idx"),
+             py::arg("minimal_duration"),
+             py::arg("activity_type"),
+             "An activity (edge) with index, base duration and type")
+        .def_readwrite("idx", &Activity::idx, "Index of the activity")
         .def_readwrite("minimal_duration", &Activity::duration, "Base duration")
         .def_readwrite("activity_type", &Activity::activity_type, "Type ID for delay dist.");
 
     // DagContext
     py::class_<DagContext>(m, "DagContext")
-        .def(py::init<vector<Event>, unordered_map<pair<EventIndex, EventIndex>, pair<ActivityIndex, Activity>>,
+        .def(py::init<vector<Event>, unordered_map<pair<EventIndex, EventIndex>, Activity>,
                       vector<pair<EventIndex, Preds>>, double>(),
              py::arg("events"), py::arg("activities"), py::arg("precedence_list"), py::arg("max_delay"),
              "Wraps a DAG: events, activity_map, precedence_list, max_delay")
@@ -429,14 +438,14 @@ PYBIND11_MODULE(_core, m) {
              "Gamma(shape,scale) truncated at max_scale")
         .def(
             "add_empirical_absolute",
-            [](GenericDelayGenerator &g, int activity_type, std::vector<double> values, std::vector<double> weights) {
+            [](GenericDelayGenerator &g, ActivityType activity_type, std::vector<double> values, std::vector<double> weights) {
                 g.dist_map_[activity_type] = EmpiricalAbsoluteDist{std::move(values), std::move(weights)};
             },
             py::arg("activity_type"), py::arg("values"), py::arg("weights"),
             "Empirical absolute: draw one of your provided values, weighted by weights.")
         .def(
             "add_empirical_relative",
-            [](GenericDelayGenerator &g, int activity_type, std::vector<double> factors, std::vector<double> weights) {
+            [](GenericDelayGenerator &g, ActivityType activity_type, std::vector<double> factors, std::vector<double> weights) {
                 g.dist_map_[activity_type] = EmpiricalRelativeDist{std::move(factors), std::move(weights)};
             },
             py::arg("activity_type"), py::arg("factors"), py::arg("weights"),

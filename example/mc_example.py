@@ -23,11 +23,11 @@ def build_mc_simulator(context_cfg: ExampleConfig, max_delay: float) -> Simulato
     analytic_ctx = build_example_context(context_cfg)
     events = [Event(ev.event_id, ev.timestamp) for ev in analytic_ctx.events]
 
-    activities: dict[tuple[int, int], tuple[int, Activity]] = {}
+    activities: dict[tuple[int, int], Activity] = {}
     generator = GenericDelayGenerator()
 
     for (src, dst), (edge_idx, edge) in analytic_ctx.activities.items():
-        activities[(src, dst)] = (edge_idx, Activity(0.0, edge_idx))
+        activities[(src, dst)] = Activity(idx=edge_idx, minimal_duration=0.0, activity_type=edge_idx)
         pmf = edge.pmf
         generator.add_empirical_absolute(ActivityType(edge_idx), pmf.values.tolist(), pmf.probabilities.tolist())
 

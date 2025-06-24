@@ -20,11 +20,11 @@ class TestSimulator(unittest.TestCase):
 
         # 2 links: (src, dst) -> Activity
         self.link_map = {
-            (0, 1): (0, Activity(3.0, 1)),
-            (1, 2): (1, Activity(5.0, 1)),
-            (1, 3): (2, Activity(5.0, 1)),
-            (2, 4): (3, Activity(15.0, 2)),
-            (3, 4): (4, Activity(10.0, 3)),
+            (0, 1): Activity(idx=0, minimal_duration=3.0, activity_type=1),
+            (1, 2): Activity(idx=1, minimal_duration=5.0, activity_type=1),
+            (1, 3): Activity(idx=2, minimal_duration=5.0, activity_type=1),
+            (2, 4): Activity(idx=3, minimal_duration=15.0, activity_type=2),
+            (3, 4): Activity(idx=4, minimal_duration=10.0, activity_type=3),
         }
 
         # Precedence: node_idx ? [(pred_idx, link_idx)]
@@ -175,7 +175,10 @@ class TestSimulator(unittest.TestCase):
 class LargeScaleTest(unittest.TestCase):
     def setUp(self) -> None:
         self.events = [Event(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(10_000)]
-        self.link_map = {(i, i + 1): (i, Activity(3.0, 1)) for i in range(9999)}
+        self.link_map = {
+            (i, i + 1): Activity(idx=i, minimal_duration=3.0, activity_type=1)
+            for i in range(9999)
+        }
         self.precedence_list = [(i, [(i - 1, i)]) for i in range(1, 10_000)]
         self.context = DagContext(
             events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0

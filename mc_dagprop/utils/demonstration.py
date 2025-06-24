@@ -15,7 +15,7 @@ def simulate_and_collect(
     """
     # simple 2-node DAG: A -> B
     events = [Event("A", EventTimestamp(0.0, 0.0, 0.0)), Event("B", EventTimestamp(0.0, 0.0, 0.0))]
-    activities = {(0, 1): (0, Activity(minimal_duration=base_duration, activity_type=1))}
+    activities = {(0, 1): Activity(idx=0, minimal_duration=base_duration, activity_type=1)}
     precedence = [(1, [(0, 0)])]
     ctx = DagContext(events, activities, precedence, max_delay=1e6)
 

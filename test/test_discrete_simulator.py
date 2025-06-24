@@ -48,7 +48,10 @@ class TestDiscreteSimulator(unittest.TestCase):
 
         self.mc_context = DagContext(
             events=self.mc_events,
-            activities={(0, 1): (0, Activity(0.0, 1)), (1, 2): (1, Activity(0.0, 2))},
+            activities={
+                (0, 1): Activity(idx=0, minimal_duration=0.0, activity_type=1),
+                (1, 2): Activity(idx=1, minimal_duration=0.0, activity_type=2),
+            },
             precedence_list=self.precedence,
             max_delay=5.0,
         )
