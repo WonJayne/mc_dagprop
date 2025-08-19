@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
-
 from demo._shared import ExampleConfig, build_example_context
-from mc_dagprop import Simulator, Event, Activity, GenericDelayGenerator, DagContext
-from mc_dagprop.types import Second, ActivityType, EventIndex
+
+from mc_dagprop import Activity, DagContext, Event, GenericDelayGenerator, Simulator
+from mc_dagprop.types import ActivityType, EventIndex, Second
 
 
 @dataclass(frozen=True)

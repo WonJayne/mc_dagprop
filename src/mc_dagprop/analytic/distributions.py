@@ -10,9 +10,9 @@ from mc_dagprop.types import Second
 from ._pmf import DiscretePMF
 
 
-def constant_pmf(value: Second, step: Second) -> DiscretePMF:
+def constant_pmf(value: Second, step: int) -> DiscretePMF:
     """Return a deterministic distribution with all mass at ``value``."""
-    pmf = DiscretePMF.delta(float(value), float(step))
+    pmf = DiscretePMF.delta(value, step)
     pmf.validate()
     pmf.validate_alignment(step)
     return pmf
@@ -66,7 +66,7 @@ def _regularized_gamma(shape: float, x: float) -> float:
     return 1.0 - math.exp(-x + shape * math.log(x) - gln) * h
 
 
-def _build_probs_from_cdf(cdf_values: np.ndarray, start: Second, step: Second, stop: Second) -> np.ndarray:
+def _build_probs_from_cdf(cdf_values: np.ndarray) -> np.ndarray:
     """Return normalised probability masses from CDF samples."""
     diffs = np.diff(cdf_values)
     total = diffs.sum()
@@ -75,7 +75,7 @@ def _build_probs_from_cdf(cdf_values: np.ndarray, start: Second, step: Second, s
     return diffs / total
 
 
-def exponential_pmf(scale: Second, step: Second, start: Second, stop: Second) -> DiscretePMF:
+def exponential_pmf(scale: Second, step: int, start: int, stop: int) -> DiscretePMF:
     """Return a discretised exponential distribution.
 
     Parameters
@@ -94,17 +94,17 @@ def exponential_pmf(scale: Second, step: Second, start: Second, stop: Second) ->
     if stop < start:
         raise ValueError("stop must be greater or equal to start")
 
-    edges = np.arange(float(start), float(stop) + float(step), float(step))
-    cdf = 1.0 - np.exp(-edges / float(scale))
-    probs = _build_probs_from_cdf(cdf, start, step, stop)
+    edges = np.arange(start, stop + step, step)
+    cdf = 1.0 - np.exp(-edges / scale)
+    probs = _build_probs_from_cdf(cdf)
     values = edges[:-1]
-    pmf = DiscretePMF(values, probs, step=float(step))
+    pmf = DiscretePMF(values, probs, step=step)
     pmf.validate()
     pmf.validate_alignment(step)
     return pmf
 
 
-def gamma_pmf(shape: float, scale: Second, step: Second, start: Second, stop: Second) -> DiscretePMF:
+def gamma_pmf(shape: float, scale: Second, step: int, start: Second, stop: Second) -> DiscretePMF:
     """Return a discretised gamma distribution."""
     if shape <= 0.0 or scale <= 0.0:
         raise ValueError("shape and scale must be positive")
@@ -113,17 +113,17 @@ def gamma_pmf(shape: float, scale: Second, step: Second, start: Second, stop: Se
     if stop < start:
         raise ValueError("stop must be greater or equal to start")
 
-    edges = np.arange(float(start), float(stop) + float(step), float(step))
-    cdf_vals = np.array([_regularized_gamma(shape, edge / float(scale)) for edge in edges])
-    probs = _build_probs_from_cdf(cdf_vals, start, step, stop)
+    edges = np.arange(start, stop + step, step)
+    cdf_vals = np.array([_regularized_gamma(shape, edge / scale) for edge in edges])
+    probs = _build_probs_from_cdf(cdf_vals)
     values = edges[:-1]
-    pmf = DiscretePMF(values, probs, step=float(step))
+    pmf = DiscretePMF(values, probs, step=step)
     pmf.validate()
     pmf.validate_alignment(step)
     return pmf
 
 
-def empirical_pmf(values: Iterable[Second], weights: Iterable[float], step: Second) -> DiscretePMF:
+def empirical_pmf(values: Iterable[Second], weights: Iterable[float], step: int) -> DiscretePMF:
     """Return a PMF defined by ``values`` and ``weights``."""
     arr_values = np.array(list(values), dtype=float)
     arr_weights = np.array(list(weights), dtype=float)
@@ -132,7 +132,7 @@ def empirical_pmf(values: Iterable[Second], weights: Iterable[float], step: Seco
     if arr_weights.sum() <= 0.0:
         raise ValueError("weights must sum to a positive number")
     probs = arr_weights / arr_weights.sum()
-    pmf = DiscretePMF(arr_values, probs, step=float(step))
+    pmf = DiscretePMF(arr_values, probs, step=step)
     pmf.validate()
     pmf.validate_alignment(step)
     return pmf

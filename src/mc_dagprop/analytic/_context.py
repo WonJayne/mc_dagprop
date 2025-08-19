@@ -112,6 +112,8 @@ def validate_context(context: AnalyticContext) -> None:
         if not np.isclose(edge.pmf.step, context.step):
             raise ValueError(f"edge {(src, dst)} step {edge.pmf.step} does not match context step size {context.step}")
         edge.pmf.validate_alignment(context.step)
+        if not np.isclose(edge.pmf.total_mass, 1.0):
+            raise ValueError(f"activity {(src, dst)} PMF does not sum to 1, got {edge.pmf.total_mass}")
 
     # Validate precedence list and build topology for cycle check
     from collections import deque

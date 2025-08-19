@@ -1,8 +1,9 @@
 # mc_dagprop/monte_carlo/_core.pyi
 from collections.abc import Collection, Iterable, Mapping, Sequence
 
-from mc_dagprop.types import ActivityIndex, ActivityType, EventId, EventIndex, Second
 from numpy._typing import NDArray
+
+from mc_dagprop.types import ActivityIndex, ActivityType, EventId, EventIndex, Second
 
 class EventTimestamp:
     """

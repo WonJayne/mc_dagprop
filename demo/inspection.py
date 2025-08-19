@@ -3,8 +3,9 @@ from collections import defaultdict
 from collections.abc import Collection
 
 import plotly.graph_objects as go
-from mc_dagprop import DagContext, SimResult
 from plotly.subplots import make_subplots
+
+from mc_dagprop import DagContext, SimResult
 
 
 def retrieve_absolute_and_relative_delays(

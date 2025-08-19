@@ -5,8 +5,8 @@ from collections.abc import Iterable, Mapping
 
 import plotly.graph_objects as go
 
-from mc_dagprop import Event, EventTimestamp, Activity, DagContext, GenericDelayGenerator, Simulator
-from mc_dagprop.types import ActivityType, ActivityIndex, Second
+from mc_dagprop import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
+from mc_dagprop.types import ActivityIndex, ActivityType, Second
 
 
 def simulate_and_collect(

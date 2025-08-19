@@ -1,4 +1,4 @@
-from demo._shared import build_example_context, ExampleConfig
+from demo._shared import ExampleConfig, build_example_context
 
 from mc_dagprop import create_analytic_propagator
 

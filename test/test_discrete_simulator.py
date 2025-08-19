@@ -2,6 +2,7 @@ import unittest
 from dataclasses import replace
 
 import numpy as np
+
 from mc_dagprop import (
     Activity,
     AnalyticContext,
@@ -31,13 +32,13 @@ class TestDiscreteSimulator(unittest.TestCase):
         )
         self.precedence = ((1, ((0, 0),)), (2, ((1, 1),)))
 
-        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))
-        act1 = AnalyticActivity(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1.0))
+        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1))
+        act1 = AnalyticActivity(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1))
         self.a_context = AnalyticContext(
             events=self.events,
             activities={(0, 1): (0, act0), (1, 2): (1, act1)},
             precedence_list=self.precedence,
-            step=1.0,
+            step=1,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -79,13 +80,13 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertEqual(mc_res.cause_event[0], -1)
 
     def test_mismatched_step_size(self) -> None:
-        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))
-        act1 = AnalyticActivity(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1.0))
+        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1))
+        act1 = AnalyticActivity(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1))
         ctx = AnalyticContext(
             events=self.events,
             activities={(0, 1): (0, act0), (1, 2): (1, act1)},
             precedence_list=self.precedence,
-            step=2.0,
+            step=2,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -97,7 +98,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             events=self.events,
             activities={},
             precedence_list=(),
-            step=0.0,
+            step=0,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -105,12 +106,12 @@ class TestDiscreteSimulator(unittest.TestCase):
             create_analytic_propagator(ctx)
 
     def test_skip_validation(self) -> None:
-        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))
+        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1))
         ctx = AnalyticContext(
             events=self.events,
             activities={(0, 1): (0, act0)},
             precedence_list=((1, ((0, 0),)),),
-            step=2.0,
+            step=2,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -121,12 +122,12 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertEqual(len(result), 3)
 
     def test_misaligned_values(self) -> None:
-        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.5]), np.array([0.5, 0.5]), step=1.0))
+        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.5]), np.array([0.5, 0.5]), step=1))
         ctx = AnalyticContext(
             events=self.events,
             activities={(0, 1): (0, act0)},
             precedence_list=((1, ((0, 0),)),),
-            step=1.0,
+            step=1,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -136,17 +137,17 @@ class TestDiscreteSimulator(unittest.TestCase):
     def test_bounds_and_overflow(self) -> None:
         events = (
             Event("0", EventTimestamp(0.0, 0.0, 0.0)),
-            Event("1", EventTimestamp(0.0, 1.5, 0.0)),
-            Event("2", EventTimestamp(0.0, 1.8, 0.0)),
+            Event("1", EventTimestamp(0.0, 2.0, 0.0)),
+            Event("2", EventTimestamp(0.0, 1.0, 0.0)),
         )
         ctx = AnalyticContext(
             events=events,
             activities={
-                (0, 1): (0, AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1.0))),
-                (1, 2): (1, AnalyticActivity(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1.0))),
+                (0, 1): (0, AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1))),
+                (1, 2): (1, AnalyticActivity(1, DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1))),
             },
             precedence_list=self.precedence,
-            step=1.0,
+            step=1,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -155,21 +156,21 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(all(isinstance(ev, SimulatedEvent) for ev in events_res))
         self.assertAlmostEqual(events_res[1].overflow, 0.0, places=6)
         self.assertAlmostEqual(events_res[2].overflow, 0.0, places=6)
-        self.assertTrue(np.allclose(events_res[1].pmf.values, [1.0, 1.5]))
-        self.assertTrue(np.all(events_res[1].pmf.values <= 1.5))
-        self.assertTrue(np.all(events_res[2].pmf.values <= 1.8))
+        self.assertTrue(np.allclose(events_res[1].pmf.values, [1.0, 2.0]))
+        self.assertTrue(np.all(events_res[1].pmf.values <= 2))
+        self.assertTrue(np.all(events_res[2].pmf.values <= 1))
         self.assertAlmostEqual(events_res[2].pmf.probabilities.sum(), 1.0, places=6)
 
     def test_rule_combinations(self) -> None:
         events = (Event("0", EventTimestamp(0.0, 10.0, 0.0)), Event("1", EventTimestamp(0.0, 1.0, 0.0)))
         edge = AnalyticActivity(
-            0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1.0)
+            0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1)
         )
         ctx = AnalyticContext(
             events=events,
             activities={(0, 1): (0, edge)},
             precedence_list=((1, ((0, 0),)),),
-            step=1.0,
+            step=1,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -184,7 +185,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             events=events,
             activities={(0, 1): (0, edge)},
             precedence_list=((1, ((0, 0),)),),
-            step=1.0,
+            step=1,
             underflow_rule=UnderflowRule.REMOVE,
             overflow_rule=OverflowRule.REMOVE,
         )
@@ -210,18 +211,18 @@ class TestDiscreteSimulator(unittest.TestCase):
         events = tuple(Event(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(5))
         precedence = ((1, ((0, 0),)), (2, ((0, 1),)), (3, ((1, 2), (2, 3))), (4, ((2, 4), (3, 5))))
         activities = {
-            (0, 1): (0, AnalyticActivity(0, DiscretePMF(values, probs, step=1.0))),
-            (0, 2): (1, AnalyticActivity(1, DiscretePMF(values, probs, step=1.0))),
-            (1, 3): (2, AnalyticActivity(2, DiscretePMF(values, probs, step=1.0))),
-            (2, 3): (3, AnalyticActivity(3, DiscretePMF(values, probs, step=1.0))),
-            (2, 4): (4, AnalyticActivity(4, DiscretePMF(values, probs, step=1.0))),
-            (3, 4): (5, AnalyticActivity(5, DiscretePMF(values, probs, step=1.0))),
+            (0, 1): (0, AnalyticActivity(0, DiscretePMF(values, probs, step=1))),
+            (0, 2): (1, AnalyticActivity(1, DiscretePMF(values, probs, step=1))),
+            (1, 3): (2, AnalyticActivity(2, DiscretePMF(values, probs, step=1))),
+            (2, 3): (3, AnalyticActivity(3, DiscretePMF(values, probs, step=1))),
+            (2, 4): (4, AnalyticActivity(4, DiscretePMF(values, probs, step=1))),
+            (3, 4): (5, AnalyticActivity(5, DiscretePMF(values, probs, step=1))),
         }
         ctx = AnalyticContext(
             events=events,
             activities=activities,
             precedence_list=precedence,
-            step=1.0,
+            step=1,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -239,7 +240,7 @@ class TestDiscreteSimulator(unittest.TestCase):
             events=events,
             activities={},
             precedence_list=(),
-            step=1.0,
+            step=1,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -248,12 +249,12 @@ class TestDiscreteSimulator(unittest.TestCase):
 
     def test_cycle_detection(self) -> None:
         events = (Event("0", EventTimestamp(0.0, 10.0, 0.0)), Event("1", EventTimestamp(0.0, 10.0, 0.0)))
-        edge = AnalyticActivity(0, DiscretePMF(np.array([1.0]), np.array([1.0]), step=1.0))
+        edge = AnalyticActivity(0, DiscretePMF(np.array([1.0]), np.array([1.0]), step=1))
         ctx = AnalyticContext(
             events=events,
             activities={(0, 1): (0, edge), (1, 0): (1, edge)},
             precedence_list=((1, ((0, 0),)), (0, ((1, 1),))),
-            step=1.0,
+            step=1,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
         )
@@ -264,13 +265,13 @@ class TestDiscreteSimulator(unittest.TestCase):
 def test_run_returns_simulated_event_objects() -> None:
     events = (Event("0", EventTimestamp(0.0, 10.0, 0.0)), Event("1", EventTimestamp(0.0, 10.0, 0.0)))
     edge = AnalyticActivity(
-        0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1.0)
+        0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1)
     )
     ctx = AnalyticContext(
         events=events,
         activities={(0, 1): (0, edge)},
         precedence_list=((1, ((0, 0),)),),
-        step=1.0,
+        step=1,
         underflow_rule=UnderflowRule.TRUNCATE,
         overflow_rule=OverflowRule.TRUNCATE,
     )
@@ -283,12 +284,12 @@ def test_run_returns_simulated_event_objects() -> None:
 def test_clipping_tolerates_rounding_errors() -> None:
     vals = np.array([-1.0, 0.0, 1.0])
     probs = np.array([0.25, 0.25, 0.5 + 1e-12])
-    pmf = DiscretePMF(vals, probs, step=1.0)
+    pmf = DiscretePMF(vals, probs, step=1)
     ctx = AnalyticContext(
         events=(Event("e0", EventTimestamp(0.0, 1.0, 0.0)),),
         activities={},
         precedence_list=(),
-        step=1.0,
+        step=1,
         underflow_rule=UnderflowRule.TRUNCATE,
         overflow_rule=OverflowRule.TRUNCATE,
     )

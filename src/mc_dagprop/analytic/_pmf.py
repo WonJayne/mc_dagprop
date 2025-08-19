@@ -13,23 +13,31 @@ class DiscretePMF:
     values: np.ndarray
     probabilities: np.ndarray
     # Step size that determines the grid spacing for ``values``.
-    step: Second
+    step: int
 
     def __post_init__(self) -> None:
         """Basic sanity checks for the distribution."""
+        self.validate()
         if len(self.values) != len(self.probabilities):
             raise ValueError("values and probs must have same length")
         if self.step < 0.0:
             raise ValueError("step size must be non-negative")
+        if not isinstance(self.step, int):
+            raise OverflowError(
+                f"step must be an integer number of seconds, got: {self.step} (type: {type(self.step)})"
+                "we limit to ints to avoid floating point precision issues"
+            )
 
     def validate(self) -> None:
         """Validate the PMF properties."""
+        if len(self.values) == 0:
+            raise ValueError("PMF values cannot be empty")
         if len(self.values) != len(self.probabilities):
             raise ValueError("values and probs must have same length")
         if len(self.values) > 1 and not np.all(self.values[1:] >= self.values[:-1]):
             raise ValueError("values must be sorted in non-decreasing order")
-        if not np.isclose(self.probabilities.sum(), 1.0):
-            raise ValueError("probabilities must sum to 1.0")
+        if not (1.0 >= self.probabilities.sum() or np.isclose(self.probabilities.sum(), 1.0)):
+            raise ValueError("Probabilities must sum to <= 1.0")
 
     def validate_alignment(self, step: Second) -> None:
         """Ensure that ``values`` align with ``step`` spacing."""
@@ -37,6 +45,9 @@ class DiscretePMF:
             raise ValueError(f"PMF step {self.step} does not match expected {step}")
         if step <= 0.0:
             raise ValueError("step must be positive")
+
+        if len(self.values) == 0:
+            raise ValueError("PMF values cannot be empty")
 
         if len(self.values) > 1:
             diffs = np.diff(self.values)
@@ -60,47 +71,55 @@ class DiscretePMF:
         """Shift the PMF by ``delta`` seconds."""
         return DiscretePMF(self.values + delta, self.probabilities.copy(), step=self.step)
 
+    def _rescale(self, expected: float) -> "DiscretePMF":
+        """Return a copy with probabilities scaled to expected mass."""
+        probs = self.probabilities.copy()
+        total = probs.sum()
+        if total > 0 and not np.isclose(total, expected, rtol=1e-12, atol=1e-15):
+            probs *= expected / total
+        return DiscretePMF(self.values.copy(), probs, step=self.step)
+
+    @staticmethod
+    def _expected_mass(m1: float, m2: float) -> float:
+        """Expected result mass for binary ops with drift correction."""
+        if np.isclose(m1, 1.0, rtol=1e-12, atol=1e-15) and np.isclose(m2, 1.0, rtol=1e-12, atol=1e-15):
+            return 1.0
+        return m1 * m2
+
     def convolve(self, other: "DiscretePMF") -> "DiscretePMF":
-        """Return the distribution of ``X + Y`` for two independent PMFs."""
-        is_delta = len(self.values) == 1
-        if is_delta:
-            other_is_delta = len(other.values) == 1
-            if other_is_delta:
-                # Both are delta functions, return a delta function at the sum of the values.
-                return DiscretePMF.delta(self.values[0] + other.values[0], step=self.step)
+        if len(self.values) == 1:
+            a, p = self.values[0], self.probabilities[0]
+            pmf = DiscretePMF(other.values + a, other.probabilities * p, step=self.step)
+        elif len(other.values) == 1:
+            b, q = other.values[0], other.probabilities[0]
+            pmf = DiscretePMF(self.values + b, self.probabilities * q, step=self.step)
+        else:
+            start = self.values[0] + other.values[0]
+            probs = np.convolve(self.probabilities, other.probabilities)
+            values = start + self.step * np.arange(len(probs))
+            pmf = DiscretePMF(values, probs, step=self.step)
 
-        step = self.step
-
-        start = self.values[0] + other.values[0]
-        probs = np.convolve(self.probabilities, other.probabilities)
-        values = start + step * np.arange(len(probs))
-        return DiscretePMF(values, probs, step=self.step)
+        expected = self._expected_mass(float(self.total_mass), float(other.total_mass))
+        return pmf._rescale(expected)
 
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
-        """Return ``max(X, Y)`` for two independent PMFs.
+        min_start = np.minimum(self.values[0], other.values[0])
+        max_end = np.maximum(self.values[-1], other.values[-1])
+        grid = np.arange(min_start, max_end + self.step, self.step)
 
-        This operation is used by :class:`AnalyticPropagator` to combine delay
-        distributions when an event has multiple predecessors.
-        """
-        if len(self.values) == 1 and len(other.values) == 1:
-            return DiscretePMF.delta(max(self.values[0], other.values[0]), step=self.step)
-
-        step = float(self.step)
-
-        min_start = min(self.values[0], other.values[0])
-        max_end = max(self.values[-1], other.values[-1])
-        grid = np.arange(min_start, max_end + step, step)
-
-        offset_self = int(round((self.values[0] - min_start) / step))
-        offset_other = int(round((other.values[0] - min_start) / step))
+        offset_self = int(round((self.values[0] - min_start) / self.step))
+        offset_other = int(round((other.values[0] - min_start) / self.step))
 
         pmf_self = np.zeros(len(grid))
         pmf_other = np.zeros(len(grid))
         pmf_self[offset_self : offset_self + len(self.probabilities)] = self.probabilities
         pmf_other[offset_other : offset_other + len(other.probabilities)] = other.probabilities
 
-        cdf_self = np.cumsum(pmf_self)
-        cdf_other = np.cumsum(pmf_other)
+        cdf_self = np.cumsum(pmf_self, dtype=np.longdouble)
+        cdf_other = np.cumsum(pmf_other, dtype=np.longdouble)
         cdf_max = cdf_self * cdf_other
-        probs = np.diff(np.concatenate(([0.0], cdf_max)))
-        return DiscretePMF(grid, probs, step=self.step)
+        probs = np.diff(np.concatenate(((0.0,), cdf_max)))
+
+        pmf = DiscretePMF(grid, probs.astype(float), step=self.step)
+        expected = self._expected_mass(float(self.total_mass), float(other.total_mass))
+        return pmf._rescale(expected)

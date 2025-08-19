@@ -1,4 +1,5 @@
 import unittest
+
 import numpy as np
 
 from mc_dagprop import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
