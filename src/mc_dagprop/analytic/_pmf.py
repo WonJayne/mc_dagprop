@@ -95,7 +95,10 @@ class DiscretePMF:
             pmf = DiscretePMF(self.values + b, self.probabilities * q, step=self.step)
         else:
             start = self.values[0] + other.values[0]
-            probs = np.convolve(self.probabilities, other.probabilities)
+            probs = np.convolve(
+                self.probabilities.astype(np.longdouble),
+                other.probabilities.astype(np.longdouble),
+            ).astype(float)
             values = start + self.step * np.arange(len(probs))
             pmf = DiscretePMF(values, probs, step=self.step)
 
@@ -110,15 +113,15 @@ class DiscretePMF:
         offset_self = int(round((self.values[0] - min_start) / self.step))
         offset_other = int(round((other.values[0] - min_start) / self.step))
 
-        pmf_self = np.zeros(len(grid))
-        pmf_other = np.zeros(len(grid))
+        pmf_self = np.zeros(len(grid), dtype=np.longdouble)
+        pmf_other = np.zeros(len(grid), dtype=np.longdouble)
         pmf_self[offset_self : offset_self + len(self.probabilities)] = self.probabilities
         pmf_other[offset_other : offset_other + len(other.probabilities)] = other.probabilities
 
         cdf_self = np.cumsum(pmf_self, dtype=np.longdouble)
         cdf_other = np.cumsum(pmf_other, dtype=np.longdouble)
-        cdf_max = cdf_self * cdf_other
-        probs = np.diff(np.concatenate(((0.0,), cdf_max)))
+        cdf_self_prev = np.concatenate((np.array([0.0], dtype=np.longdouble), cdf_self[:-1]))
+        probs = pmf_self * cdf_other + pmf_other * cdf_self_prev
 
         pmf = DiscretePMF(grid, probs.astype(float), step=self.step)
         expected = self._expected_mass(float(self.total_mass), float(other.total_mass))
