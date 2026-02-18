@@ -1,5 +1,12 @@
 # Release Notes
 
+## Unreleased
+
+### Documentation
+
+- Synchronized the README with the current public API: analytic examples now use `AnalyticActivity`, explicit flow rules, and the `step` field name from `AnalyticContext`.
+- Updated package-structure notes to reflect the current modules (`demo/` examples) and removed references to non-existent utilities.
+
 ## 0.9.0
 
 ### Highlights

@@ -4,22 +4,16 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/mc_dagprop.svg)](https://pypi.org/project/mc_dagprop/)  
 [![License](https://img.shields.io/pypi/l/mc_dagprop.svg)](https://github.com/WonJayne/mc_dagprop/blob/main/LICENSE)
 
-**mc_dagprop** is a fast, Monte Carlo–style propagation simulator for directed
-acyclic graphs (DAGs), written in C++ with Python bindings via **pybind11**. It
-allows you to model timing networks (timetables, precedence graphs, etc.) and
-inject user-defined delay distributions on edges.
+**mc_dagprop** is a fast propagation toolkit for directed acyclic graphs (DAGs),
+with a C++ Monte Carlo engine and a Python analytic engine.
 
-Under the hood, we leverage the high-performance
-[utl::random module](https://github.com/DmitriBogdanov/UTL/blob/master/docs/module_random.md)
-for all pseudo-random number generation—offering better speed and quality than
-the standard library.
+The package provides two propagation modes:
 
-The package provides two event-driven propagation engines. The analytic solver
-implements the approach introduced by Büker and co-authors and its later
-extension.[^1][^2] The Monte Carlo module follows an event-based simulation
-scheme similar to the one described by De Wilde et al.[^3]
-Both engines share the same DAG representation, and now also expose
-parallel propagator naming: `MonteCarloPropagator` and `AnalyticPropagator`.
+- **Monte Carlo** simulation based on sampled edge delays.
+- **Analytic** propagation of full discrete probability mass functions (PMFs).
+
+Both engines share the same event/activity DAG model and expose aligned naming:
+`MonteCarloPropagator` and `AnalyticPropagator`.
 
 ## Background
 
@@ -36,21 +30,19 @@ which promotes innovative studies in transport management and the future of mobi
 
 ## Features
 
-- **Lightweight & high-performance** core in C++  
-- Simple Python API via **poetry** or **pip**  
-- Custom per-activity-type delay distributions:
-  - **Constant** (linear scaling)
-  - **Exponential** (scales base duration with cutoff)
-  - **Gamma** (shape & scale, to scale base duration)
-  - **Empirical** (absolute or relative)
-    - **Absolute**: fixed values with weights
-    - **Relative**: scaling factors with weights
-  - Easily extendable (Weibull, etc.)  
-- Single-run (`run(seed)`) and batch-run (`run_many([seeds])`), the latter releases the GIL, thus one can run it embarrassingly parallel with multithreading
-- Returns a **SimResult**: realized times, per-edge durations, and causal predecessors  
+- **High-performance Monte Carlo core** in C++ via pybind11.
+- **Deterministic analytic propagator** for full event-time PMFs.
+- Custom per-activity-type Monte Carlo delay distributions:
+  - Constant
+  - Exponential
+  - Gamma
+  - Empirical absolute/relative
+- Single-run (`run(seed)`) and batched (`run_many(seeds)`) Monte Carlo APIs.
+- Shared DAG concepts (`Event`, `Activity`, `DagContext`) and unified naming.
+- Optional global `max_delay` cap available in both engines.
 
-> **Note:** Defining multiple distributions for the *same* `activity_type` will override previous settings.  
-> Always set exactly one distribution per activity type.
+> **Note:** For Monte Carlo, configuring multiple distributions for the same
+> `activity_type` overrides previous settings. Keep exactly one distribution per type.
 
 ---
 
@@ -68,18 +60,16 @@ pip install mc-dagprop
 
 ---
 
-## Usage
-
-### Quickstart
+## Quickstart (Monte Carlo)
 
 ```python
 from mc_dagprop import (
-  EventTimestamp,
-  Event,
   Activity,
   DagContext,
+  Event,
+  EventTimestamp,
   GenericDelayGenerator,
-  Simulator,
+  MonteCarloPropagator,
 )
 
 # 1) Build your DAG timing context
@@ -103,39 +93,91 @@ ctx = DagContext(
   max_delay=1800.0,
 )
 
-# 2) Configure a delay generator (one per activity_type)
+# 2) Configure a delay generator (one distribution per activity_type)
 gen = GenericDelayGenerator()
-gen.add_constant(activity_type=1, factor=1.5)  # only one call for type=1
+gen.add_constant(activity_type=1, factor=1.5)
 
-# 3) Create simulator and run
-sim = Simulator(ctx, gen)
+# 3) Run propagation
+sim = MonteCarloPropagator(ctx, gen)
 result = sim.run(seed=42)
+
 print("Realized times:", result.realized)
 print("Edge durations:", result.durations)
 print("Causal predecessors:", result.cause_event)
 ```
 
+`Simulator` remains available as a compatibility alias of
+`MonteCarloPropagator`.
+
 ---
 
-## Architecture
+## Analytic Propagator
 
-### Monte Carlo engine (`mc_dagprop.monte_carlo`)
+Use `AnalyticPropagator` to propagate discrete delay PMFs deterministically.
 
-Compiled extension wrapping a C++ core. Provides the `Simulator`, the alias
-`MonteCarloPropagator`, `GenericDelayGenerator` and associated data
-structures for running Monte Carlo experiments.
+```python
+from mc_dagprop import (
+  AnalyticContext,
+  Event,
+  EventTimestamp,
+  OverflowRule,
+  UnderflowRule,
+  create_analytic_propagator,
+)
+from mc_dagprop.analytic import AnalyticActivity, exponential_pmf
 
-### Full-distribution propagator (`mc_dagprop.analytic`)
+step = 1.0
 
-Python implementation that propagates discrete probability mass functions deterministically. It
-exposes the `AnalyticPropagator`, `create_analytic_propagator`, and helper classes.
+delay_pmf = exponential_pmf(scale=10.0, step=step, start=0.0, stop=300.0)
 
-### Shared components
+events = (
+  Event("A", EventTimestamp(0.0, 10.0, 0.0)),
+  Event("B", EventTimestamp(0.0, 20.0, 0.0)),
+)
 
-- `mc_dagprop.types` – typed aliases for seconds, indices and identifiers.
-- `mc_dagprop.utils` – plotting and inspection utilities.
+activities = {
+  (0, 1): (0, AnalyticActivity(idx=0, pmf=delay_pmf)),
+}
 
-Install the package as **mc-dagprop** but import modules from the `mc_dagprop` namespace, e.g.:
+precedence = (
+  (1, ((0, 0),)),
+)
+
+ctx = AnalyticContext(
+  events=events,
+  activities=activities,
+  precedence_list=precedence,
+  step=step,
+  underflow_rule=UnderflowRule.TRUNCATE,
+  overflow_rule=OverflowRule.TRUNCATE,
+  max_delay=None,
+)
+
+sim = create_analytic_propagator(ctx)
+pmfs = sim.run()
+
+print(pmfs[1].pmf.values)
+print(pmfs[1].pmf.probabilities)
+```
+
+Notes:
+
+- `step` is the shared PMF grid spacing for the analytic context.
+- `create_analytic_propagator(..., validate=True)` validates PMF alignment,
+  mass consistency, indices, and DAG acyclicity before running.
+- `max_delay` mirrors Monte Carlo semantics by capping each event at
+  `min(latest, earliest + max_delay)`.
+
+---
+
+## Package structure
+
+- `mc_dagprop.monte_carlo` — compiled Monte Carlo core and delay generator.
+- `mc_dagprop.analytic` — pure-Python PMF types, distributions, and propagator.
+- `mc_dagprop.types` — shared typed aliases.
+- `demo/` — runnable examples for analytic and Monte Carlo usage.
+
+Install the distribution as **mc-dagprop** and import from `mc_dagprop`:
 
 ```python
 from mc_dagprop import Simulator
@@ -143,184 +185,8 @@ from mc_dagprop import Simulator
 
 ---
 
-## API Reference
-
-### `EventTimestamp(earliest: float, latest: float, actual: float)`
-
-Holds the scheduling window and actual time for one event (node):
-
-- `earliest` – earliest possible occurrence  
-- `latest`   – latest allowed occurrence  
-- `actual`   – scheduled (baseline) timestamp  
-
-### `Event(id: str, timestamp: EventTimestamp)`
-
-Wraps a DAG node with:
-
-- `id`        – string key for the node  
-- `timestamp` – an `EventTimestamp` instance  
-
-### `Activity(idx: int, minimal_duration: float, activity_type: int)`
-
-Represents an edge in the DAG:
-
-- `idx`              – unique edge index
-- `minimal_duration` – minimal (base) duration
-- `activity_type`    – integer type identifier
-
-### `DagContext(events, activities, precedence_list, max_delay)`
-
-Container for your DAG:
-
-- `events`:          `list[Event]`
-- `activities`:      `dict[(src_idx, dst_idx), Activity]`
-- `precedence_list`: `list[(target_idx, [(pred_idx, link_idx), …])]`
-- `max_delay`:       overall cap on delay propagation
-  - Can be given in any order. `Simulator` will sort topologically and raise
-    a `RuntimeError` if cycles are detected.
-
-### `GenericDelayGenerator`
-
-Configurable delay factory (one distribution per `activity_type`):
-
-- `.add_constant(activity_type, factor)`  
-- `.add_exponential(activity_type, lambda_, max_scale)`  
-- `.add_gamma(activity_type, shape, scale, max_scale=∞)`  
-- `.add_empirical_absolute(activity_type, values, weights)`
-- `.add_empirical_relative(activity_type, factors, weights)`
-- `.set_seed(seed)`  
-
-### `MonteCarloPropagator(context: DagContext, generator: GenericDelayGenerator)`
-
-- `.run(seed: int) → SimResult`  
-- `.run_many(seeds: Sequence[int]) → list[SimResult]`  
-
-For backward compatibility, `Simulator` is still available as an alias.
-
-### `SimResult`
-
-- `.realized`:   `NDArray[float]` – event times after propagation  
-- `.durations`:  `NDArray[float]` – per-edge durations (base + extra)  
-- `.cause_event`: `NDArray[int]` – which predecessor caused each event  
-
-## Analytic Propagator
-
-You can propagate discrete delay distributions analytically using `AnalyticPropagator`.
-Define per-edge probability mass functions and build an `AnalyticContext`.
-For example, a delay following an exponential distribution with mean `10` seconds
-truncated to the range `[0, 300]` on a one-second grid can be generated with
-`exponential_pmf`:
-
-```python
-from mc_dagprop.analytic import exponential_pmf
-
-delay_pmf = exponential_pmf(scale=10.0, step=1.0, start=0.0, stop=300.0)
-```
-
-You can then use this PMF in the context definition:
-
-```python
-from mc_dagprop import (
-  AnalyticContext,
-  DiscretePMF,
-  EventTimestamp,
-  Event,
-  create_analytic_propagator,
-)
-
-events = (
-  Event("A", EventTimestamp(0, 10, 0)),
-  Event("B", EventTimestamp(0, 10, 0)),
-)
-activities = {(0, 1): (0, delay_pmf)}
-precedence = (
-  (1, ((0, 0),)),
-)
-ctx = AnalyticContext(
-  events=events,
-  activities=activities,
-  precedence_list=precedence,
-  step=1.0,
-)
-
-sim = create_analytic_propagator(ctx)
-pmfs = sim.run()
-print(pmfs[1].values, pmfs[1].probs)
-```
-This computes event-time PMFs deterministically without Monte-Carlo sampling.
-
-The ``step_size`` sets the spacing for all values in the discrete PMFs.
-The optional ``max_delay`` in ``AnalyticContext`` mirrors the Monte Carlo
-context: each event is additionally capped at ``earliest + max_delay`` and any
-resulting excess mass is processed through the configured overflow rule.
-By default ``create_analytic_propagator()`` calls ``AnalyticContext.validate()``
-before constructing the simulator and raises an error when any edge uses a
-different step. All PMF value grids must therefore have constant spacing equal
-to ``step_size`` and start on a multiple of that step. Pass ``validate=False``
-to skip this check if you have already validated the context yourself.
-Each ``Event`` may specify ``bounds=(lower, upper)`` to clip the
-resulting distribution. Overflow and underflow mass can be truncated to the
-closest bound, removed or redistributed across the remaining range. Control this
-behaviour via the optional ``underflow_rule`` and ``overflow_rule`` arguments of
-``create_analytic_propagator()``. ``TRUNCATE`` places the mass on the bound,
-``REMOVE`` drops it entirely and ``REDISTRIBUTE`` reweights the other values.
-The ``run()`` method returns a sequence of
-``SimulatedEvent`` objects which hold the resulting PMF and the probability mass
-discarded on either side. Events without predecessors are deterministic and
-their PMFs collapse to a single value at the earliest bound.
-By default the step size is ``1.0`` second and typical delay deviations range
-roughly from ``-180`` s up to ``+1800`` s.
-
-
----
-
-## Visualization Demo
-
-```bash
-pip install mc-dagprop[plot]
-python demo/distribution.py
-```
-
-Displays histograms of realized times and delays.
-
-Additional examples are available via `python -m mc_dagprop.demo.analytic` and
-`python -m mc_dagprop.demo.monte_carlo`.
-
----
-
-## Benchmarks
-
-A lightweight benchmark helps to measure raw execution speed for a large
-simulation instance. Two delay generators are provided – one constant and
-one exponential – so you can compare different implementations against the
-same baseline and detect performance regressions.
-
-```bash
-python benchmarks/benchmark_simulator.py
-```
-
----
-
 ## References
 
-[^1]: T. Büker, "Railway Delay Propagation..." (original analytic solver).
-[^2]: Follow-up extension to Büker's method describing the analytic event
-    propagation in more detail.
-[^3]: S. De Wilde *et al.*, "Improving the robustness in railway station areas,"
-    *European Journal of Operational Research*, 2014.
-
----
-
-## Development
-
-```bash
-git clone https://github.com/WonJayne/mc_dagprop.git
-cd mc_dagprop
-poetry install
-```
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE)
+[^1]: Büker, T., et al. (2018). Delay propagation in stochastic railway networks.
+[^2]: Subsequent extensions used in SORRI for timetable robustness analysis.
+[^3]: De Wilde, B., et al. Event-based simulation approaches for railway delay analysis.
