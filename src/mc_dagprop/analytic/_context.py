@@ -39,25 +39,6 @@ class SimulatedEvent:
     overflow: ProbabilityMass
 
 
-@dataclass(frozen=True, slots=True)
-class AnalyticContext:
-    """Container describing the analytic propagation network.
-
-    Attributes:
-        events: Immutable sequence of scheduled events.
-        activities: Mapping from (source, target) node pairs to analytic edges.
-        precedence_list: List of ``(target, predecessors)`` tuples.
-        step: Discrete time step shared by all distributions.
-    """
-
-    events: tuple[Event, ...]
-    activities: dict[tuple[EventIndex, EventIndex], tuple[ActivityIndex, AnalyticActivity]]
-    precedence_list: tuple[tuple[EventIndex, tuple[PredecessorTuple, ...]], ...]
-    step: Second
-    underflow_rule: UnderflowRule
-    overflow_rule: OverflowRule
-
-
 @unique
 class UnderflowRule(IntEnum):
     """Policy for mass falling below the lower bound.
@@ -84,6 +65,31 @@ class OverflowRule(IntEnum):
     REDISTRIBUTE = 3
 
 
+@dataclass(frozen=True, slots=True)
+class AnalyticContext:
+    """Container describing the analytic propagation network.
+
+    Attributes:
+        events: Immutable sequence of scheduled events.
+        activities: Mapping from (source, target) node pairs to analytic edges.
+        precedence_list: List of ``(target, predecessors)`` tuples.
+        step: Discrete time step shared by all distributions.
+        underflow_rule: Rule for mass below event lower bounds.
+        overflow_rule: Rule for mass above event upper bounds.
+        max_delay: Optional global delay cap relative to each event's earliest
+            time. When set, each event is effectively bounded above by
+            ``min(event.latest, event.earliest + max_delay)``.
+    """
+
+    events: tuple[Event, ...]
+    activities: dict[tuple[EventIndex, EventIndex], tuple[ActivityIndex, AnalyticActivity]]
+    precedence_list: tuple[tuple[EventIndex, tuple[PredecessorTuple, ...]], ...]
+    step: Second
+    underflow_rule: UnderflowRule
+    overflow_rule: OverflowRule
+    max_delay: Second | None = None
+
+
 def validate_context(context: AnalyticContext) -> None:
     """Validate that ``context`` is structurally correct.
 
@@ -95,6 +101,8 @@ def validate_context(context: AnalyticContext) -> None:
 
     if context.step <= 0.0:
         raise ValueError("step_size must be positive")
+    if context.max_delay is not None and context.max_delay < 0.0:
+        raise ValueError("max_delay must be non-negative when provided")
 
     # Validate scheduled events
     for i, ev in enumerate(context.events):

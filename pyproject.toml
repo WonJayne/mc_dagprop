@@ -1,6 +1,6 @@
 [project]
 name = "mc-dagprop"
-version = "0.7.0"
+version = "0.9.0"
 description = "Fast, Monte Carlo DAG propagation simulator with user‑defined delay distributions"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" }

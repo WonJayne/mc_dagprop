@@ -196,6 +196,9 @@ public:
         if (generator.dist_map_.count(-1)) {
             throw std::runtime_error("Activity type -1 is reserved for no delay");
         }
+        if (context_.max_delay < 0.0) {
+            throw std::runtime_error("max_delay must be non-negative");
+        }
 
         // 1) Flatten distributions and build type->index map
         delay_distributions_.reserve(generator.dist_map_.size());
@@ -327,18 +330,22 @@ public:
 
         // Propagate events
         for (EventIndex event_id : event_evaluation_order_) {
+            const double earliest = context_.events[event_id].ts.earliest;
+            const double event_upper_bound = earliest + context_.max_delay;
+
             double latest = realized_times_[event_id];
             EventIndex cause = -1;
             for (size_t idx = predecessor_offsets_[event_id]; idx < predecessor_offsets_[event_id + 1]; ++idx) {
                 EventIndex src = flat_predecessor_sources_[idx];
                 ActivityIndex edge = flat_predecessor_edges_[idx];
                 double t = realized_times_[src] + actual_durations_[edge];
+                t = std::min(t, event_upper_bound);
                 if (t >= latest) {
                     latest = t;
                     cause = src;
                 }
             }
-            realized_times_[event_id] = latest;
+            realized_times_[event_id] = std::min(latest, event_upper_bound);
             causing_event_index_[event_id] = cause;
         }
 
@@ -535,7 +542,7 @@ PYBIND11_MODULE(_core, m) {
             "Empirical relative: draw a factor in [0,∞), then multiply by the activity duration.");
 
     // Simulator
-    py::class_<Simulator>(m, "Simulator")
+    py::class_<Simulator>(m, "MonteCarloPropagator")
         .def(py::init<DagContext, GenericDelayGenerator>(), py::arg("context"), py::arg("generator"),
              "Construct simulator with context and delay‐generator")
         .def("node_count", &Simulator::node_count, "Number of events")

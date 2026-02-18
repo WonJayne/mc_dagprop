@@ -87,7 +87,7 @@ class GenericDelayGenerator:
         self, activity_type: ActivityType, factors: Collection[Second], weights: Collection[float]
     ) -> None: ...
 
-class Simulator:
+class MonteCarloPropagator:
     """
     Monte Carlo DAG propagator: run single or batch simulations. ``precedence_list``
     in the provided ``DagContext`` may be in any order; it is sorted topologically
@@ -97,3 +97,5 @@ class Simulator:
     def __init__(self, context: DagContext, generator: GenericDelayGenerator) -> None: ...
     def run(self, seed: int) -> SimResult: ...
     def run_many(self, seeds: Iterable[int]) -> list[SimResult]: ...
+
+Simulator = MonteCarloPropagator
