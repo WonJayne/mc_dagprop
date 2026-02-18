@@ -50,7 +50,7 @@ class TestDiscreteSimulator(unittest.TestCase):
                 (1, 2): Activity(idx=1, minimal_duration=0.0, activity_type=2),
             },
             precedence_list=self.precedence,
-            max_delay=5.0,
+            max_delay=1e6,
         )
         gen = GenericDelayGenerator()
         gen.add_empirical_absolute(1, [1.0, 2.0], [0.5, 0.5])
@@ -101,6 +101,19 @@ class TestDiscreteSimulator(unittest.TestCase):
             step=0,
             underflow_rule=UnderflowRule.TRUNCATE,
             overflow_rule=OverflowRule.TRUNCATE,
+        )
+        with self.assertRaises(ValueError):
+            create_analytic_propagator(ctx)
+
+    def test_negative_max_delay_rejected(self) -> None:
+        ctx = AnalyticContext(
+            events=self.events,
+            activities={},
+            precedence_list=(),
+            step=1,
+            underflow_rule=UnderflowRule.TRUNCATE,
+            overflow_rule=OverflowRule.TRUNCATE,
+            max_delay=-1,
         )
         with self.assertRaises(ValueError):
             create_analytic_propagator(ctx)

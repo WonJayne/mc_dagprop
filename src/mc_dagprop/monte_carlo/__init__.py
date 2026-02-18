@@ -1,3 +1,17 @@
-from ._core import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, SimResult, Simulator
+from __future__ import annotations
 
-__all__ = ["GenericDelayGenerator", "DagContext", "SimResult", "Event", "Activity", "Simulator", "EventTimestamp"]
+from ._core import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, MonteCarloPropagator, SimResult
+
+Simulator = MonteCarloPropagator
+
+
+__all__ = [
+    "GenericDelayGenerator",
+    "DagContext",
+    "SimResult",
+    "Event",
+    "Activity",
+    "MonteCarloPropagator",
+    "Simulator",
+    "EventTimestamp",
+]

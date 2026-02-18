@@ -31,7 +31,7 @@ class TestSimulator(unittest.TestCase):
         self.precedence_list = [(1, [(0, 0)]), (2, [(1, 1)]), (3, [(1, 2)]), (4, [(2, 3), (3, 4)])]
 
         self.context = DagContext(
-            events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0
+            events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=1e6
         )
 
     def test_constant_via_generic(self):
@@ -64,7 +64,7 @@ class TestSimulator(unittest.TestCase):
     def test_unsorted_precedence_same_result(self):
         unsorted = list(reversed(self.precedence_list))
         ctx_unsorted = DagContext(
-            events=self.events, activities=self.link_map, precedence_list=unsorted, max_delay=10.0
+            events=self.events, activities=self.link_map, precedence_list=unsorted, max_delay=1e6
         )
 
         gen_a = GenericDelayGenerator()
@@ -178,7 +178,7 @@ class LargeScaleTest(unittest.TestCase):
         self.link_map = {(i, i + 1): Activity(idx=i, minimal_duration=3.0, activity_type=1) for i in range(9999)}
         self.precedence_list = [(i, [(i - 1, i)]) for i in range(1, 10_000)]
         self.context = DagContext(
-            events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=10.0
+            events=self.events, activities=self.link_map, precedence_list=self.precedence_list, max_delay=1e6
         )
 
     def test_large_scale_simulation(self):

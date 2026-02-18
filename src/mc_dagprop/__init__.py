@@ -3,7 +3,16 @@
 from importlib.metadata import version
 
 try:
-    from .monte_carlo import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, SimResult, Simulator
+    from .monte_carlo import (
+        Activity,
+        DagContext,
+        Event,
+        EventTimestamp,
+        GenericDelayGenerator,
+        MonteCarloPropagator,
+        SimResult,
+        Simulator,
+    )
 except ModuleNotFoundError as exc:  # pragma: no cover - compiled module missing
     raise ImportError(
         "mc_dagprop requires the compiled extension 'mc_dagprop.monte_carlo._core'. "
@@ -28,6 +37,7 @@ __all__ = [
     "Event",
     "Activity",
     "Simulator",
+    "MonteCarloPropagator",
     "EventTimestamp",
     "DiscretePMF",
     "SimulatedEvent",

@@ -18,8 +18,8 @@ The package provides two event-driven propagation engines. The analytic solver
 implements the approach introduced by Büker and co-authors and its later
 extension.[^1][^2] The Monte Carlo module follows an event-based simulation
 scheme similar to the one described by De Wilde et al.[^3]
-Both engines share the same Python interface and operate on an identical DAG
-representation.
+Both engines share the same DAG representation, and now also expose
+parallel propagator naming: `MonteCarloPropagator` and `AnalyticPropagator`.
 
 ## Background
 
@@ -121,13 +121,14 @@ print("Causal predecessors:", result.cause_event)
 
 ### Monte Carlo engine (`mc_dagprop.monte_carlo`)
 
-Compiled extension wrapping a C++ core. Provides the `Simulator`, `GenericDelayGenerator` and
-associated data structures for running Monte Carlo experiments.
+Compiled extension wrapping a C++ core. Provides the `Simulator`, the alias
+`MonteCarloPropagator`, `GenericDelayGenerator` and associated data
+structures for running Monte Carlo experiments.
 
 ### Full-distribution propagator (`mc_dagprop.analytic`)
 
 Python implementation that propagates discrete probability mass functions deterministically. It
-exposes the `AnalyticPropagator` and helper classes.
+exposes the `AnalyticPropagator`, `create_analytic_propagator`, and helper classes.
 
 ### Shared components
 
@@ -189,10 +190,12 @@ Configurable delay factory (one distribution per `activity_type`):
 - `.add_empirical_relative(activity_type, factors, weights)`
 - `.set_seed(seed)`  
 
-### `Simulator(context: DagContext, generator: GenericDelayGenerator)`
+### `MonteCarloPropagator(context: DagContext, generator: GenericDelayGenerator)`
 
 - `.run(seed: int) → SimResult`  
 - `.run_many(seeds: Sequence[int]) → list[SimResult]`  
+
+For backward compatibility, `Simulator` is still available as an alias.
 
 ### `SimResult`
 
@@ -247,6 +250,9 @@ print(pmfs[1].values, pmfs[1].probs)
 This computes event-time PMFs deterministically without Monte-Carlo sampling.
 
 The ``step_size`` sets the spacing for all values in the discrete PMFs.
+The optional ``max_delay`` in ``AnalyticContext`` mirrors the Monte Carlo
+context: each event is additionally capped at ``earliest + max_delay`` and any
+resulting excess mass is processed through the configured overflow rule.
 By default ``create_analytic_propagator()`` calls ``AnalyticContext.validate()``
 before constructing the simulator and raises an error when any edge uses a
 different step. All PMF value grids must therefore have constant spacing equal

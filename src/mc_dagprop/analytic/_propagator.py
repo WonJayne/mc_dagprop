@@ -96,9 +96,6 @@ class AnalyticPropagator:
         removed by ``apply_bounds`` is recorded per event.
         """
         n_events = len(self.context.events)
-        # NOTE[codex]: We need index-based lookup for predecessors. Using a
-        # simple append-only list would break because event indices are not
-        # guaranteed to match the processing order.
         events: list[SimulatedEvent | None] = [None] * n_events
         for this_node in self._topological_node_order:
             ev = self.context.events[this_node]
@@ -136,8 +133,8 @@ class AnalyticPropagator:
                 if not np.isclose(after, 1.0, rtol=1e-12, atol=1e-15) and all(np.isclose(b, 1.0) for b in before):
                     print(f"[LOSS in MAXIMUM] node={this_node} inputs={before} after={after:.17g}")
 
-            lb, ub = np.round(ev.timestamp.earliest), np.round(ev.timestamp.latest)
-            events[this_node] = self._convert_to_simulated_event(resulting_pmf, lb, ub)
+            lower_bound, upper_bound = self._event_bounds(ev.timestamp.earliest, ev.timestamp.latest)
+            events[this_node] = self._convert_to_simulated_event(resulting_pmf, lower_bound, upper_bound)
 
             # Sanity: _convert shouldn't change mass when under/overflow=0
             assert np.isclose(
@@ -149,6 +146,14 @@ class AnalyticPropagator:
 
         assert all(events[i] is not None for i in range(n_events)), "Not all events were processed, check context"
         return tuple(events[i] for i in range(n_events))
+
+    def _event_bounds(self, earliest: Second, latest: Second) -> tuple[int, int]:
+        """Return rounded event bounds after applying context-level delay caps."""
+
+        capped_upper_bound = latest
+        if self.context.max_delay is not None:
+            capped_upper_bound = min(latest, earliest + self.context.max_delay)
+        return int(np.round(earliest)), int(np.round(capped_upper_bound))
 
     def _convert_to_simulated_event(self, pmf: DiscretePMF, min_value: int, max_value: int) -> SimulatedEvent:
         """Clip pmf to [min_value, max_value] and mass-correct depending on flow rules.
@@ -209,7 +214,7 @@ class AnalyticPropagator:
             over_mass = ProbabilityMass(0.0)
 
         # ---- Proportional redistribution (if enabled)
-        to_redistribute = (to_redistribute_under + to_redistribute_over)
+        to_redistribute = to_redistribute_under + to_redistribute_over
         base_inside = new_probs.sum()
         if to_redistribute > 0.0:
             if base_inside == 0.0:
@@ -248,13 +253,13 @@ class AnalyticPropagator:
         clipped = DiscretePMF(new_vals, new_probs, step=pmf.step)
 
         # Invariant sanity-check (tolerant)
-        total = (clipped.total_mass + under_mass + over_mass)
+        total = clipped.total_mass + under_mass + over_mass
         if not np.isclose(total, 1.0, rtol=1e-12, atol=1e-15):
             # Tighten by a last tiny rescale if we’re microscopically off due to casts
             corr = 1.0 / total if total > 0 else 1.0
             new_probs *= corr
             clipped = DiscretePMF(new_vals, new_probs, step=pmf.step)
-            total = (clipped.total_mass + under_mass + over_mass)
+            total = clipped.total_mass + under_mass + over_mass
             assert np.isclose(total, 1.0, rtol=1e-12, atol=1e-15), f"Mass mismatch after correction: {total=}"
 
         return SimulatedEvent(clipped, under_mass, over_mass)
