@@ -8,7 +8,13 @@ from mc_dagprop.types import ProbabilityMass, Second
 
 @dataclass(frozen=True, slots=True)
 class DiscretePMF:
-    """Simple probability mass function on an equidistant grid."""
+    """Probability mass function on an equidistant integer grid.
+
+    The arithmetic in :meth:`convolve` and :meth:`maximum` is implemented with
+    numerically stable intermediate dtypes (``np.longdouble``) and an explicit
+    post-operation mass rescaling step. This avoids avoidable mass drift when
+    combining very small probabilities many times during analytic propagation.
+    """
 
     values: np.ndarray
     probabilities: np.ndarray
@@ -72,7 +78,14 @@ class DiscretePMF:
         return DiscretePMF(self.values + delta, self.probabilities.copy(), step=self.step)
 
     def _rescale(self, expected: float) -> "DiscretePMF":
-        """Return a copy with probabilities scaled to expected mass."""
+        """Return a copy with probabilities scaled to expected mass.
+
+        Floating-point operations can accumulate tiny relative errors in total
+        mass, especially after repeated convolutions/max-compositions with thin
+        tails. This method keeps the distribution physically consistent by
+        restoring the expected probability mass whenever meaningful drift is
+        detected.
+        """
         probs = self.probabilities.copy()
         total = probs.sum()
         if total > 0 and not np.isclose(total, expected, rtol=1e-12, atol=1e-15):
@@ -81,12 +94,18 @@ class DiscretePMF:
 
     @staticmethod
     def _expected_mass(m1: float, m2: float) -> float:
-        """Expected result mass for binary ops with drift correction."""
+        """Expected result mass for binary ops with drift correction.
+
+        For fully normalized operands we force exact unit mass in the result,
+        while still allowing partially truncated operands to compose via
+        multiplication.
+        """
         if np.isclose(m1, 1.0, rtol=1e-12, atol=1e-15) and np.isclose(m2, 1.0, rtol=1e-12, atol=1e-15):
             return 1.0
         return m1 * m2
 
     def convolve(self, other: "DiscretePMF") -> "DiscretePMF":
+        """Convolve two PMFs using stable arithmetic and mass correction."""
         if len(self.values) == 1:
             a, p = self.values[0], self.probabilities[0]
             pmf = DiscretePMF(other.values + a, other.probabilities * p, step=self.step)
@@ -106,6 +125,7 @@ class DiscretePMF:
         return pmf._rescale(expected)
 
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
+        """Return PMF of ``max(X, Y)`` with stable cumulative arithmetic."""
         min_start = np.minimum(self.values[0], other.values[0])
         max_end = np.maximum(self.values[-1], other.values[-1])
         grid = np.arange(min_start, max_end + self.step, self.step)
