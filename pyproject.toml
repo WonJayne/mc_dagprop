@@ -26,6 +26,7 @@ plot = ["plotly"]
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
+pytest = "^8.3.5"
 
 [build-system]
 requires = [
@@ -159,4 +160,3 @@ overgeneral-exceptions = "Exception"
 [tool.setuptools.packages.find]
 include = ["mc_dagprop*"]
 where = ["src"]
-
