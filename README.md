@@ -165,6 +165,10 @@ Notes:
 - `step` is the shared PMF grid spacing for the analytic context.
 - `create_analytic_propagator(..., validate=True)` validates PMF alignment,
   mass consistency, indices, and DAG acyclicity before running.
+- PMF binary operations (`convolve` and `maximum`) use numerically stable
+  intermediates (`np.longdouble`) and a post-operation mass correction. This
+  prevents tiny probabilities from being lost to cumulative floating-point
+  drift in deep analytic propagation chains.
 - `max_delay` mirrors Monte Carlo semantics by capping each event at
   `min(latest, earliest + max_delay)`.
 
