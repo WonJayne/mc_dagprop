@@ -2,6 +2,7 @@ import unittest
 from dataclasses import replace
 
 import numpy as np
+import pytest
 
 from mc_dagprop import (
     Activity,
@@ -16,6 +17,31 @@ from mc_dagprop import (
 )
 from mc_dagprop.analytic import OverflowRule, UnderflowRule
 from mc_dagprop.analytic._context import AnalyticActivity, SimulatedEvent
+
+
+TEST_ACTIVITY_VALUES = np.array([-2.0, -1.0, 0.0, 1.0, 2.0, 3.0])
+TEST_ACTIVITY_PROBABILITIES = np.array([0.10, 0.15, 0.20, 0.25, 0.10, 0.20])
+EXPECTED_INSIDE_VALUES = np.array([0.0, 1.0, 2.0])
+
+
+def _run_rule_case(underflow_rule: UnderflowRule, overflow_rule: OverflowRule) -> SimulatedEvent:
+    events = (
+        Event("source", EventTimestamp(0.0, 0.0, 0.0)),
+        Event("bounded_target", EventTimestamp(0.0, 2.0, 0.0)),
+    )
+    analytic_activity = AnalyticActivity(
+        0,
+        DiscretePMF(TEST_ACTIVITY_VALUES, TEST_ACTIVITY_PROBABILITIES, step=1),
+    )
+    context = AnalyticContext(
+        events=events,
+        activities={(0, 1): (0, analytic_activity)},
+        precedence_list=((1, ((0, 0),)),),
+        step=1,
+        underflow_rule=underflow_rule,
+        overflow_rule=overflow_rule,
+    )
+    return create_analytic_propagator(context).run()[1]
 
 
 class TestDiscreteSimulator(unittest.TestCase):
@@ -310,6 +336,118 @@ def test_clipping_tolerates_rounding_errors() -> None:
     res = sim._convert_to_simulated_event(pmf, 0.0, 1.0)
     total = res.pmf.probabilities.sum() + float(res.underflow) + float(res.overflow)
     assert np.isclose(total, 1.0)
+
+
+
+@pytest.mark.parametrize(
+    ("underflow_rule", "overflow_rule", "expected_probabilities", "expected_underflow", "expected_overflow"),
+    [
+        pytest.param(
+            UnderflowRule.TRUNCATE,
+            OverflowRule.TRUNCATE,
+            np.array([0.45, 0.25, 0.30]),
+            0.0,
+            0.0,
+            id="truncate-under_truncate-over",
+        ),
+        pytest.param(
+            UnderflowRule.TRUNCATE,
+            OverflowRule.REMOVE,
+            np.array([0.45, 0.25, 0.10]),
+            0.0,
+            0.20,
+            id="truncate-under_remove-over",
+        ),
+        pytest.param(
+            UnderflowRule.TRUNCATE,
+            OverflowRule.REDISTRIBUTE,
+            np.array([0.5625, 0.3125, 0.1250]),
+            0.0,
+            0.0,
+            id="truncate-under_redistribute-over",
+        ),
+        pytest.param(
+            UnderflowRule.REMOVE,
+            OverflowRule.TRUNCATE,
+            np.array([0.20, 0.25, 0.30]),
+            0.25,
+            0.0,
+            id="remove-under_truncate-over",
+        ),
+        pytest.param(
+            UnderflowRule.REMOVE,
+            OverflowRule.REMOVE,
+            np.array([0.20, 0.25, 0.10]),
+            0.25,
+            0.20,
+            id="remove-under_remove-over",
+        ),
+        pytest.param(
+            UnderflowRule.REMOVE,
+            OverflowRule.REDISTRIBUTE,
+            np.array([0.2727272727272727, 0.3409090909090909, 0.13636363636363635]),
+            0.25,
+            0.0,
+            id="remove-under_redistribute-over",
+        ),
+        pytest.param(
+            UnderflowRule.REDISTRIBUTE,
+            OverflowRule.TRUNCATE,
+            np.array([0.26666666666666666, 0.3333333333333333, 0.4000000000000001]),
+            0.0,
+            0.0,
+            id="redistribute-under_truncate-over",
+        ),
+        pytest.param(
+            UnderflowRule.REDISTRIBUTE,
+            OverflowRule.REMOVE,
+            np.array([0.2909090909090909, 0.36363636363636365, 0.14545454545454545]),
+            0.0,
+            0.20,
+            id="redistribute-under_remove-over",
+        ),
+        pytest.param(
+            UnderflowRule.REDISTRIBUTE,
+            OverflowRule.REDISTRIBUTE,
+            np.array([0.36363636363636365, 0.4545454545454546, 0.18181818181818182]),
+            0.0,
+            0.0,
+            id="redistribute-under_redistribute-over",
+        ),
+    ],
+)
+def test_all_underflow_and_overflow_rule_combinations(
+    underflow_rule: UnderflowRule,
+    overflow_rule: OverflowRule,
+    expected_probabilities: np.ndarray,
+    expected_underflow: float,
+    expected_overflow: float,
+) -> None:
+    result = _run_rule_case(underflow_rule, overflow_rule)
+
+    np.testing.assert_allclose(result.pmf.values, EXPECTED_INSIDE_VALUES)
+    np.testing.assert_allclose(result.pmf.probabilities, expected_probabilities, rtol=0.0, atol=1e-12)
+    assert float(result.underflow) == pytest.approx(expected_underflow)
+    assert float(result.overflow) == pytest.approx(expected_overflow)
+
+
+@pytest.mark.parametrize(
+    ("underflow_rule", "overflow_rule"),
+    [(under_rule, over_rule) for under_rule in UnderflowRule for over_rule in OverflowRule],
+)
+def test_rule_combinations_preserve_total_mass_and_non_negative_probabilities(
+    underflow_rule: UnderflowRule,
+    overflow_rule: OverflowRule,
+) -> None:
+    result = _run_rule_case(underflow_rule, overflow_rule)
+
+    assert np.all(result.pmf.probabilities >= 0.0)
+    assert np.isclose(
+        float(result.pmf.total_mass + result.underflow + result.overflow),
+        1.0,
+        rtol=1e-12,
+        atol=1e-15,
+    )
 
 
 if __name__ == "__main__":
