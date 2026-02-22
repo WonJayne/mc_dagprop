@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Build and CI
+
+- Added explicit platform-aware native extension flags in `setup.py` so the C++ core builds cleanly across Windows, macOS, and Linux.
+- Added a GitHub Actions workflow (`.github/workflows/build-wheels.yml`) to build wheel artifacts for Windows, macOS (x86_64 + arm64), and Linux using `cibuildwheel`, plus an sdist build job.
+
+### Documentation
+
+- Documented the cross-platform wheel build workflow and local source-build command in the README.
+
 ### Documentation
 
 - Synchronized the README with the current public API: analytic examples now use `AnalyticActivity`, explicit flow rules, and the `step` field name from `AnalyticContext`.

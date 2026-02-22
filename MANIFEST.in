@@ -1,0 +1,5 @@
+include README.md
+include LICENSE
+recursive-include src/mc_dagprop/monte_carlo *.hpp *.cpp *.pyi
+recursive-include src/mc_dagprop *.typed
+recursive-include test *.py
