@@ -1242,12 +1242,9 @@ public:
         return this->generate_standard_normal(gen) * params.stddev + params.mean;
     }
 
-    constexpr void reset() const noexcept {
-        this->saved           = 0;
-        this->saved_available = false;
-    }
+    constexpr void reset() const noexcept {}
     [[nodiscard]] constexpr param_type  param() const noexcept { return this->pars; }
-    constexpr void                      param(const param_type& p) noexcept { *this = NormalDistribution(p); }
+    constexpr void                      param(const param_type& p) noexcept { *this = ApproxNormalDistribution(p); }
     [[nodiscard]] constexpr result_type mean() const noexcept { return this->pars.mean; }
     [[nodiscard]] constexpr result_type stddev() const noexcept { return this->pars.stddev; }
     [[nodiscard]] constexpr result_type min() const noexcept { return std::numeric_limits<result_type>::lowest(); }
@@ -1359,12 +1356,9 @@ struct ApproxNormalDistribution {
         return _approx_standard_normal<result_type>(gen) * params.stddev + params.mean;
     }
 
-    constexpr void reset() const noexcept {
-        this->saved           = 0;
-        this->saved_available = false;
-    }
+    constexpr void reset() const noexcept {}
     [[nodiscard]] constexpr param_type  param() const noexcept { return this->pars; }
-    constexpr void                      param(const param_type& p) noexcept { *this = NormalDistribution(p); }
+    constexpr void                      param(const param_type& p) noexcept { *this = ApproxNormalDistribution(p); }
     [[nodiscard]] constexpr result_type mean() const noexcept { return this->pars.mean; }
     [[nodiscard]] constexpr result_type stddev() const noexcept { return this->pars.stddev; }
     [[nodiscard]] constexpr result_type min() const noexcept { return std::numeric_limits<result_type>::lowest(); }

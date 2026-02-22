@@ -9,6 +9,8 @@
 - Hardened the wheel workflow for macOS/Windows by upgrading core build tooling before wheel creation and switching cibuildwheel to the `build` frontend.
 - Pinned build-backend tooling to `setuptools<77` in `pyproject.toml` to avoid the `packaging.licenses` import requirement introduced by newer setuptools in isolated wheel builds.
 - Normalized `project.license` to PEP 621 table form (`{ text = "MIT" }`) for compatibility with the pinned setuptools build backend range.
+- Fixed `ApproxNormalDistribution::reset()` in `_custom_rng.hpp` to avoid references to non-existent cached-normal members, resolving clang/macOS wheel compile failures.
+- Updated `_core.cpp` constructor moves to use explicit `std::move` to satisfy stricter clang diagnostics in macOS wheel builds.
 
 ### Documentation
 
