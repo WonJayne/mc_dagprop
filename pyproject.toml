@@ -1,6 +1,6 @@
 [project]
 name = "mc-dagprop"
-version = "0.9.0"
+version = "0.9.1"
 description = "Fast, Monte Carlo DAG propagation simulator with user‑defined delay distributions"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" }
@@ -14,7 +14,7 @@ license = { text = "MIT" }
 
 # list of dependencies
 dependencies = [
-    "numpy>=2.0.0",
+    "numpy>=2.4.0",
     "plotly>=6.0.0; extra == 'plot'",
 ]
 
@@ -39,7 +39,7 @@ build-backend = "setuptools.build_meta"
 [tool.black]
 line-length = 120
 skip-magic-trailing-comma = "True"
-target-version = ["py311", "py312", "py313" ]
+target-version = ["py311", "py312", "py313"]
 exclude = "/(\n    \\.eggs\n  | \\.git\n  | \\.hg\n  | \\.mypy_cache\n  | \\.tox\n  | \\.venv\n  | _build\n  | buck-out\n  | build\n | venv\n  | build_venv\n | dist\n)/\n"
 
 [tool.isort]

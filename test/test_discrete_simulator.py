@@ -18,7 +18,6 @@ from mc_dagprop import (
 from mc_dagprop.analytic import OverflowRule, UnderflowRule
 from mc_dagprop.analytic._context import AnalyticActivity, SimulatedEvent
 
-
 TEST_ACTIVITY_VALUES = np.array([-2.0, -1.0, 0.0, 1.0, 2.0, 3.0])
 TEST_ACTIVITY_PROBABILITIES = np.array([0.10, 0.15, 0.20, 0.25, 0.10, 0.20])
 EXPECTED_INSIDE_VALUES = np.array([0.0, 1.0, 2.0])
