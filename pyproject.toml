@@ -30,6 +30,7 @@ pytest = "^8.3.5"
 
 [build-system]
 requires = [
+    "packaging>=24.2",
     "setuptools>=61.0",
     "wheel",
     "pybind11>=2.13"

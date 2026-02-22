@@ -6,6 +6,7 @@
 
 - Added explicit platform-aware native extension flags in `setup.py` so the C++ core builds cleanly across Windows, macOS, and Linux.
 - Added a GitHub Actions workflow (`.github/workflows/build-wheels.yml`) to build wheel artifacts for Windows, macOS (x86_64 + arm64), and Linux using `cibuildwheel`, plus an sdist build job.
+- Hardened the wheel workflow for macOS/Windows by upgrading packaging/build tooling before wheel creation and switching cibuildwheel to the `build` frontend.
 
 ### Documentation
 
