@@ -58,7 +58,7 @@ struct DagContext {
 
     DagContext(vector<Event> ev, unordered_map<pair<EventIndex, EventIndex>, Activity> am,
                vector<pair<EventIndex, Preds>> pl, double md)
-        : events(move(ev)), activity_map(move(am)), precedence_list(move(pl)), max_delay(md) {}
+        : events(std::move(ev)), activity_map(std::move(am)), precedence_list(std::move(pl)), max_delay(md) {}
 };
 
 // ── Simulation Result ────────────────────────────────────────────────────

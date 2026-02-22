@@ -10,7 +10,7 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 readme = "README.md"
-license = "MIT"
+license = { text = "MIT" }
 
 # list of dependencies
 dependencies = [
@@ -30,7 +30,7 @@ pytest = "^8.3.5"
 
 [build-system]
 requires = [
-    "setuptools>=61.0",
+    "setuptools>=61.0,<77",
     "wheel",
     "pybind11>=2.13"
 ]

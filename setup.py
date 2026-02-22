@@ -1,8 +1,10 @@
 # encoding: utf-8
 # Legacy script, if you want to build without poetry etc..., just bare metal
+import os
 import sys
 import tomllib
 from pathlib import Path
+from typing import Final
 
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
@@ -15,22 +17,42 @@ class GetPybindInclude:
         return pybind11.get_include()
 
 
-if sys.platform == "win32":
-    platform_compile_args = [
-        "/O2",  # optimize for speed
-        "/Ot",  # favor speed over size
-        "/Ob2",  # inline any suitable functions
-        "/Oi",  # generate intrinsic functions for memcpy etc.
-        "/Oy",  # omit frame pointers
-        "/fp:fast",  # fast (non-strict) floating-point
-        "/Gy",  # enable function-level linking
-        "/GL",  # whole-program optimization
-        "/std:c++20",
-    ]
-    platform_linker_args = ["/LTCG", "/INCREMENTAL:NO"]
-else:
-    platform_compile_args = ["-O3", "-std=c++20", "-flto"]
-    platform_linker_args = ["-flto"]
+USE_LTO: Final[bool] = os.getenv("MC_DAGPROP_ENABLE_LTO", "1") == "1"
+
+
+def resolve_platform_build_flags() -> tuple[list[str], list[str]]:
+    """Return compile and linker flags for the active target platform."""
+    if sys.platform == "win32":
+        compile_args = [
+            "/O2",  # optimize for speed
+            "/Ot",  # favor speed over size
+            "/Ob2",  # inline any suitable functions
+            "/Oi",  # generate intrinsic functions for memcpy etc.
+            "/Oy",  # omit frame pointers
+            "/fp:fast",  # fast (non-strict) floating-point
+            "/Gy",  # enable function-level linking
+            "/std:c++20",
+        ]
+        linker_args = ["/INCREMENTAL:NO"]
+        if USE_LTO:
+            compile_args.append("/GL")
+            linker_args.append("/LTCG")
+        return compile_args, linker_args
+
+    compile_args = ["-O3", "-std=c++20"]
+    linker_args: list[str] = []
+
+    if USE_LTO:
+        compile_args.append("-flto")
+        linker_args.append("-flto")
+
+    if sys.platform.startswith("linux"):
+        compile_args.append("-fvisibility=hidden")
+
+    return compile_args, linker_args
+
+
+platform_compile_args, platform_linker_args = resolve_platform_build_flags()
 
 # Read version from pyproject.toml if available so that the legacy
 # setuptools build produces the same package version as the Poetry

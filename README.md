@@ -189,6 +189,23 @@ from mc_dagprop import Simulator
 
 ---
 
+
+## Building wheels for Windows, macOS, and Linux
+
+Cross-platform wheel builds are configured through GitHub Actions in
+`.github/workflows/build-wheels.yml` using `cibuildwheel`.
+
+- **Windows** (`windows-latest`)
+- **macOS** (`macos-latest`, `x86_64` and `arm64`)
+- **Linux** (`ubuntu-latest`)
+
+To run a local source build without the CI workflow:
+
+```bash
+python -m pip install --upgrade build
+python -m build
+```
+
 ## References
 
 [^1]: Büker, T., et al. (2018). Delay propagation in stochastic railway networks.
