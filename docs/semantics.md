@@ -41,3 +41,19 @@ the activity contributes only its configured minimal duration.
 
 Each stochastic delay family may be registered at most once per activity type.
 Registering a second family for the same activity type is an error.
+
+## Activity durations and discrete PMFs
+
+Every activity has a deterministic minimal duration. Registered delay families
+model stochastic extra delay added on top of that minimal duration; unregistered
+activity types have zero stochastic extra delay and therefore contribute only the
+minimal duration. Monte Carlo samples realised edge durations as minimal duration
+plus sampled extra delay. Shared frontend analytic construction converts the
+same extra-delay families into full edge-increment PMFs by shifting them by the
+minimal duration.
+
+Analytic PMFs are strict discrete-grid objects: support values must be finite,
+grid-aligned integer-step values and probabilities must be finite,
+non-negative, and normalized unless a policy explicitly creates a documented
+sub-probability result. Analytic `latest` remains a hard clipping bound; Monte
+Carlo `latest` remains metadata and does not cap realised samples.

@@ -9,6 +9,7 @@
 #include <limits>
 #include <numeric>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -74,9 +75,9 @@ struct ConstantDist {
 };
 
 struct ExponentialDist {
-    double lambda, max_scale;
+    double scale, max_scale;
     exponential_distribution<double> dist;
-    ExponentialDist(const double lam = 1.0, const double mx = 1.0) : lambda(lam), max_scale(mx), dist(1.0 / lam) {}
+    ExponentialDist(const double sc = 1.0, const double mx = 1.0) : scale(sc), max_scale(mx), dist(1.0 / sc) {}
     // Sampling updates the distribution state, so this method cannot be const
     double sample(RNG &rng, const double d) {
         double x;
@@ -151,11 +152,11 @@ class GenericDelayGenerator {
     void set_seed(int s) { rng_.seed(s); }
     void ensure_unregistered(ActivityType t) const {
         if (dist_map_.count(t)) {
-            throw std::runtime_error("delay family already registered for activity type");
+            throw std::runtime_error("delay family already registered for activity type " + std::to_string(t));
         }
     }
     void add_constant(ActivityType t, double f) { ensure_unregistered(t); dist_map_[t] = ConstantDist{f}; }
-    void add_exponential(ActivityType t, double lam, double mx) { ensure_unregistered(t); dist_map_[t] = ExponentialDist{lam, mx}; }
+    void add_exponential(ActivityType t, double scale, double mx) { ensure_unregistered(t); dist_map_[t] = ExponentialDist{scale, mx}; }
     void add_gamma(ActivityType t, double k, double s, double m = numeric_limits<double>::infinity()) {
         ensure_unregistered(t);
         dist_map_[t] = GammaDist{k, s, m};
@@ -317,6 +318,15 @@ public:
         // Load earliest times
         for (int i = 0; i < E; ++i) {
             realized_times_[i] = context_.events[i].ts.earliest;
+        }
+
+        for (auto &dist : delay_distributions_) {
+            std::visit([](auto &typed_dist) {
+                using DistType = std::decay_t<decltype(typed_dist)>;
+                if constexpr (!std::is_same_v<DistType, ConstantDist>) {
+                    typed_dist.dist.reset();
+                }
+            }, dist);
         }
 
         // Sample delays
@@ -514,8 +524,13 @@ PYBIND11_MODULE(_core, m) {
         .def("set_seed", &GenericDelayGenerator::set_seed, py::arg("seed"), "Set RNG seed for reproducibility")
         .def("add_constant", &GenericDelayGenerator::add_constant, py::arg("activity_type"), py::arg("factor"),
              "Constant: delay = factor * duration")
-        .def("add_exponential", &GenericDelayGenerator::add_exponential, py::arg("activity_type"), py::arg("lambda_"),
-             py::arg("max_scale"), "Exponential(λ) truncated at max_scale")
+        .def("add_exponential", &GenericDelayGenerator::add_exponential, py::arg("activity_type"), py::arg("scale"),
+             py::arg("max_scale"), "Exponential distribution with mean scale, truncated at max_scale")
+        .def("add_exponential", [](GenericDelayGenerator &g, ActivityType activity_type, double lambda_, double max_scale) {
+                PyErr_WarnEx(PyExc_DeprecationWarning, "lambda_ is deprecated; use scale for the exponential mean", 1);
+                g.add_exponential(activity_type, lambda_, max_scale);
+             }, py::arg("activity_type"), py::arg("lambda_"), py::arg("max_scale"),
+             "Deprecated alias: lambda_ is interpreted as scale/mean")
         .def("add_gamma", &GenericDelayGenerator::add_gamma, py::arg("activity_type"), py::arg("shape"),
              py::arg("scale"), py::arg("max_scale") = numeric_limits<double>::infinity(),
              "Gamma(shape,scale) truncated at max_scale")
