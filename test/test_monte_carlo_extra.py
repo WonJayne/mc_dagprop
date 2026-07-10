@@ -17,7 +17,7 @@ class BaseContextMixin:
             (1, 2): Activity(idx=1, minimal_duration=2.0, activity_type=1),
         }
         precedence = [(1, [(0, 0)]), (2, [(1, 1)])]
-        return DagContext(events=events, activities=activities, precedence_list=precedence, max_delay=1e6)
+        return DagContext(events=events, activities=activities, precedence_list=precedence)
 
 
 class TestDelayDistributions(BaseContextMixin, unittest.TestCase):
@@ -64,7 +64,7 @@ class TestErrorConditions(BaseContextMixin, unittest.TestCase):
             (1, 0): Activity(idx=1, minimal_duration=1.0, activity_type=1),
         }
         precedence = [(1, [(0, 0)]), (0, [(1, 1)])]
-        context = DagContext(events=events, activities=activities, precedence_list=precedence, max_delay=1e6)
+        context = DagContext(events=events, activities=activities, precedence_list=precedence)
         gen = GenericDelayGenerator()
         gen.add_constant(1, 0.0)
         with self.assertRaises(RuntimeError):
@@ -77,18 +77,6 @@ class TestErrorConditions(BaseContextMixin, unittest.TestCase):
         with self.assertRaises(RuntimeError):
             Simulator(context, gen)
 
-    def test_negative_max_delay_rejected(self) -> None:
-        context = self.create_context()
-        invalid_context = DagContext(
-            events=context.events,
-            activities=context.activities,
-            precedence_list=context.precedence_list,
-            max_delay=-1.0,
-        )
-        gen = GenericDelayGenerator()
-        gen.add_constant(1, 0.0)
-        with self.assertRaises(RuntimeError):
-            Simulator(invalid_context, gen)
 
 
 class TestRunMany(BaseContextMixin, unittest.TestCase):

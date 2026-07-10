@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 
 from mc_dagprop import (
     Activity,
@@ -76,7 +77,6 @@ def test_large_chain_parity() -> None:
             (1, 2): Activity(idx=1, minimal_duration=0.0, activity_type=2),
         },
         precedence_list=[(1, [(0, 0)]), (2, [(1, 1)])],
-        max_delay=120.0,
     )
     generator = GenericDelayGenerator()
     generator.add_empirical_absolute(1, values_a.tolist(), probs_a.tolist())
@@ -124,7 +124,6 @@ def test_large_branching_parity() -> None:
             (2, 3): Activity(idx=3, minimal_duration=0.0, activity_type=1),
         },
         precedence_list=[(1, [(0, 0)]), (2, [(0, 1)]), (3, [(1, 2), (2, 3)])],
-        max_delay=200.0,
     )
     generator = GenericDelayGenerator()
     generator.add_empirical_absolute(1, values_left.tolist(), probs_left.tolist())
@@ -137,11 +136,11 @@ def test_large_branching_parity() -> None:
 
 def test_many_links_chain_parity() -> None:
     chain_length = 100
-    max_delay = 1_000.0
+    latest_bound = 1_000.0
     delay_values = np.array([0.0, 1.0, 2.0])
     delay_probabilities = np.array([0.2, 0.5, 0.3])
 
-    events = tuple(Event(f"E{i}", EventTimestamp(0.0, max_delay, 0.0)) for i in range(chain_length + 1))
+    events = tuple(Event(f"E{i}", EventTimestamp(0.0, latest_bound, 0.0)) for i in range(chain_length + 1))
     analytic_activities: dict[tuple[int, int], tuple[int, AnalyticActivity]] = {}
     mc_activities: dict[tuple[int, int], Activity] = {}
     analytic_precedence: list[tuple[int, tuple[tuple[int, int], ...]]] = []
@@ -164,13 +163,10 @@ def test_many_links_chain_parity() -> None:
         step=1,
         underflow_rule=UnderflowRule.TRUNCATE,
         overflow_rule=OverflowRule.TRUNCATE,
-        max_delay=max_delay,
     )
     analytic_output = create_analytic_propagator(analytic_context).run()[-1].pmf
 
-    mc_context = DagContext(
-        events=list(events), activities=mc_activities, precedence_list=mc_precedence, max_delay=max_delay
-    )
+    mc_context = DagContext(events=list(events), activities=mc_activities, precedence_list=mc_precedence)
     generator = GenericDelayGenerator()
     generator.add_empirical_absolute(1, delay_values.tolist(), delay_probabilities.tolist())
     simulator = MonteCarloPropagator(mc_context, generator)
@@ -179,12 +175,11 @@ def test_many_links_chain_parity() -> None:
     _assert_distribution_parity(analytic_output, samples, ParityTolerance(probability_atol=0.03, mean_atol=0.2))
 
 
-def test_max_delay_parity_with_truncation() -> None:
+
+def test_analytic_latest_is_hard_bound() -> None:
     values = np.array([3.0, 4.0, 5.0, 6.0])
     probabilities = np.array([0.25, 0.25, 0.3, 0.2])
-    max_delay = 4.0
-
-    events = (Event("E0", EventTimestamp(10.0, 100.0, 10.0)), Event("E1", EventTimestamp(12.0, 80.0, 12.0)))
+    events = (Event("E0", EventTimestamp(10.0, 10.0, 10.0)), Event("E1", EventTimestamp(12.0, 14.0, 12.0)))
 
     analytic_context = AnalyticContext(
         events=events,
@@ -193,23 +188,90 @@ def test_max_delay_parity_with_truncation() -> None:
         step=1,
         underflow_rule=UnderflowRule.TRUNCATE,
         overflow_rule=OverflowRule.TRUNCATE,
-        max_delay=max_delay,
     )
 
     analytic_result = create_analytic_propagator(analytic_context).run()[1]
-    assert analytic_result.pmf.values.max() <= events[1].timestamp.earliest + max_delay
+    assert analytic_result.pmf.values.max() == 14.0
     assert float(analytic_result.overflow) == 0.0
+
+
+def test_monte_carlo_latest_is_semantic_metadata_only() -> None:
+    events = [Event("E0", EventTimestamp(10.0, 10.0, 10.0)), Event("E1", EventTimestamp(12.0, 14.0, 12.0))]
+    mc_context = DagContext(
+        events=events,
+        activities={(0, 1): Activity(idx=0, minimal_duration=10.0, activity_type=1)},
+        precedence_list=[(1, [(0, 0)])],
+    )
+    generator = GenericDelayGenerator()
+    generator.add_constant(1, 0.0)
+    result = MonteCarloPropagator(mc_context, generator).run(seed=1)
+
+    assert result.realized[1] == 20.0
+    assert result.realized[1] > events[1].timestamp.latest
+
+
+def test_unregistered_activity_types_are_deterministic() -> None:
+    events = [Event("E0", EventTimestamp(0.0, 100.0, 0.0)), Event("E1", EventTimestamp(0.0, 100.0, 0.0))]
+    mc_context = DagContext(
+        events=events,
+        activities={(0, 1): Activity(idx=0, minimal_duration=7.0, activity_type=99)},
+        precedence_list=[(1, [(0, 0)])],
+    )
+
+    result = MonteCarloPropagator(mc_context, GenericDelayGenerator()).run(seed=1)
+
+    assert result.durations[0] == 7.0
+    assert result.realized[1] == 7.0
+
+
+def test_duplicate_delay_family_registration_raises_error() -> None:
+    generator = GenericDelayGenerator()
+    generator.add_constant(1, 0.0)
+
+    with pytest.raises(RuntimeError):
+        generator.add_exponential(1, 1.0, 2.0)
+
+
+def test_reconvergent_shared_ancestry_documents_marginal_maximum_non_equivalence() -> None:
+    """Analytic maximum treats equal marginals as independent after a shared stochastic ancestor."""
+
+    values = np.array([0.0, 1.0])
+    probabilities = np.array([0.5, 0.5])
+    zero = DiscretePMF(np.array([0.0]), np.array([1.0]), step=1)
+    events = tuple(Event(f"E{i}", EventTimestamp(0.0, 10.0, 0.0)) for i in range(5))
+
+    analytic_context = AnalyticContext(
+        events=events,
+        activities={
+            (0, 1): (0, AnalyticActivity(0, DiscretePMF(values, probabilities, step=1))),
+            (1, 2): (1, AnalyticActivity(1, zero)),
+            (1, 3): (2, AnalyticActivity(2, zero)),
+            (2, 4): (3, AnalyticActivity(3, zero)),
+            (3, 4): (4, AnalyticActivity(4, zero)),
+        },
+        precedence_list=((1, ((0, 0),)), (2, ((1, 1),)), (3, ((1, 2),)), (4, ((2, 3), (3, 4)))),
+        step=1,
+        underflow_rule=UnderflowRule.TRUNCATE,
+        overflow_rule=OverflowRule.TRUNCATE,
+    )
+    analytic_pmf = create_analytic_propagator(analytic_context).run()[4].pmf
 
     mc_context = DagContext(
         events=list(events),
-        activities={(0, 1): Activity(idx=0, minimal_duration=0.0, activity_type=1)},
-        precedence_list=[(1, [(0, 0)])],
-        max_delay=max_delay,
+        activities={
+            (0, 1): Activity(idx=0, minimal_duration=0.0, activity_type=1),
+            (1, 2): Activity(idx=1, minimal_duration=0.0, activity_type=99),
+            (1, 3): Activity(idx=2, minimal_duration=0.0, activity_type=99),
+            (2, 4): Activity(idx=3, minimal_duration=0.0, activity_type=99),
+            (3, 4): Activity(idx=4, minimal_duration=0.0, activity_type=99),
+        },
+        precedence_list=[(1, [(0, 0)]), (2, [(1, 1)]), (3, [(1, 2)]), (4, [(2, 3), (3, 4)])],
     )
     generator = GenericDelayGenerator()
     generator.add_empirical_absolute(1, values.tolist(), probabilities.tolist())
     simulator = MonteCarloPropagator(mc_context, generator)
+    samples = np.array([simulator.run(seed).realized[4] for seed in range(12_000)])
 
-    sample_values = np.array([simulator.run(seed).realized[1] for seed in range(8_000)])
-    assert float(sample_values.max()) <= events[1].timestamp.earliest + max_delay
-    _assert_distribution_parity(analytic_result.pmf, sample_values, ParityTolerance(0.025, 0.05))
+    assert analytic_pmf.values.tolist() == [0.0, 1.0]
+    np.testing.assert_allclose(analytic_pmf.probabilities, [0.25, 0.75])
+    assert np.mean(samples == 1.0) == pytest.approx(0.5, abs=0.03)

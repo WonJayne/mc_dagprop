@@ -148,12 +148,9 @@ class AnalyticPropagator:
         return tuple(events[i] for i in range(n_events))
 
     def _event_bounds(self, earliest: Second, latest: Second) -> tuple[int, int]:
-        """Return rounded event bounds after applying context-level delay caps."""
+        """Return rounded event bounds from the scheduled event window."""
 
-        capped_upper_bound = latest
-        if self.context.max_delay is not None:
-            capped_upper_bound = min(latest, earliest + self.context.max_delay)
-        return int(np.round(earliest)), int(np.round(capped_upper_bound))
+        return int(np.round(earliest)), int(np.round(latest))
 
     def _convert_to_simulated_event(self, pmf: DiscretePMF, min_value: int, max_value: int) -> SimulatedEvent:
         """Clip pmf to [min_value, max_value] and mass-correct depending on flow rules.

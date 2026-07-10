@@ -54,11 +54,9 @@ struct DagContext {
     // user provides Activity with idx property
     unordered_map<pair<EventIndex, EventIndex>, Activity> activity_map;
     vector<pair<EventIndex, Preds>> precedence_list;
-    double max_delay;
-
     DagContext(vector<Event> ev, unordered_map<pair<EventIndex, EventIndex>, Activity> am,
-               vector<pair<EventIndex, Preds>> pl, double md)
-        : events(std::move(ev)), activity_map(std::move(am)), precedence_list(std::move(pl)), max_delay(md) {}
+               vector<pair<EventIndex, Preds>> pl)
+        : events(std::move(ev)), activity_map(std::move(am)), precedence_list(std::move(pl)) {}
 };
 
 // ── Simulation Result ────────────────────────────────────────────────────
@@ -151,9 +149,15 @@ class GenericDelayGenerator {
     GenericDelayGenerator() : rng_(random_device{}()) {}
 
     void set_seed(int s) { rng_.seed(s); }
-    void add_constant(ActivityType t, double f) { dist_map_[t] = ConstantDist{f}; }
-    void add_exponential(ActivityType t, double lam, double mx) { dist_map_[t] = ExponentialDist{lam, mx}; }
+    void ensure_unregistered(ActivityType t) const {
+        if (dist_map_.count(t)) {
+            throw std::runtime_error("delay family already registered for activity type");
+        }
+    }
+    void add_constant(ActivityType t, double f) { ensure_unregistered(t); dist_map_[t] = ConstantDist{f}; }
+    void add_exponential(ActivityType t, double lam, double mx) { ensure_unregistered(t); dist_map_[t] = ExponentialDist{lam, mx}; }
     void add_gamma(ActivityType t, double k, double s, double m = numeric_limits<double>::infinity()) {
+        ensure_unregistered(t);
         dist_map_[t] = GammaDist{k, s, m};
     }
 };
@@ -196,10 +200,6 @@ public:
         if (generator.dist_map_.count(-1)) {
             throw std::runtime_error("Activity type -1 is reserved for no delay");
         }
-        if (context_.max_delay < 0.0) {
-            throw std::runtime_error("max_delay must be non-negative");
-        }
-
         // 1) Flatten distributions and build type->index map
         delay_distributions_.reserve(generator.dist_map_.size());
         int dist_counter = 0;
@@ -330,22 +330,18 @@ public:
 
         // Propagate events
         for (EventIndex event_id : event_evaluation_order_) {
-            const double earliest = context_.events[event_id].ts.earliest;
-            const double event_upper_bound = earliest + context_.max_delay;
-
             double latest = realized_times_[event_id];
             EventIndex cause = -1;
             for (size_t idx = predecessor_offsets_[event_id]; idx < predecessor_offsets_[event_id + 1]; ++idx) {
                 EventIndex src = flat_predecessor_sources_[idx];
                 ActivityIndex edge = flat_predecessor_edges_[idx];
                 double t = realized_times_[src] + actual_durations_[edge];
-                t = std::min(t, event_upper_bound);
                 if (t >= latest) {
                     latest = t;
                     cause = src;
                 }
             }
-            realized_times_[event_id] = std::min(latest, event_upper_bound);
+            realized_times_[event_id] = latest;
             causing_event_index_[event_id] = cause;
         }
 
@@ -423,22 +419,20 @@ PYBIND11_MODULE(_core, m) {
     py::class_<DagContext> ctx_cls(m, "DagContext");
     ctx_cls
         .def(py::init<vector<Event>, unordered_map<pair<EventIndex, EventIndex>, Activity>,
-                      vector<pair<EventIndex, Preds>>, double>(),
-             py::arg("events"), py::arg("activities"), py::arg("precedence_list"), py::arg("max_delay"),
-             "Wraps a DAG: events, activity_map, precedence_list, max_delay")
+                      vector<pair<EventIndex, Preds>>>(),
+             py::arg("events"), py::arg("activities"), py::arg("precedence_list"),
+             "Wraps a DAG: events, activity_map, precedence_list")
         .def_readwrite("events", &DagContext::events)
         .def_readwrite("activities", &DagContext::activity_map)
         .def_readwrite("precedence_list", &DagContext::precedence_list)
-        .def_readwrite("max_delay", &DagContext::max_delay)
         .def(
             "__repr__",
             [](const DagContext &ctx) {
                 py::object events_r = py::repr(py::cast(ctx.events));
                 py::object act_r = py::repr(py::cast(ctx.activity_map));
                 py::object preds_r = py::repr(py::cast(ctx.precedence_list));
-                return py::str(
-                           "DagContext(events={}, activities={}, precedence_list={}, max_delay={})")
-                    .format(events_r, act_r, preds_r, ctx.max_delay);
+                return py::str("DagContext(events={}, activities={}, precedence_list={})")
+                    .format(events_r, act_r, preds_r);
             },
             "Return ``repr(self)`` style string.");
 
@@ -483,7 +477,6 @@ PYBIND11_MODULE(_core, m) {
     ctx_ann["events"] = Sequence;
     ctx_ann["activities"] = Mapping;
     ctx_ann["precedence_list"] = Sequence;
-    ctx_ann["max_delay"] = Second;
     ctx_cls.attr("__annotations__") = ctx_ann;
     dataclass(ctx_cls);
 
@@ -529,6 +522,7 @@ PYBIND11_MODULE(_core, m) {
         .def(
             "add_empirical_absolute",
             [](GenericDelayGenerator &g, ActivityType activity_type, std::vector<double> values, std::vector<double> weights) {
+                g.ensure_unregistered(activity_type);
                 g.dist_map_[activity_type] = EmpiricalAbsoluteDist{std::move(values), std::move(weights)};
             },
             py::arg("activity_type"), py::arg("values"), py::arg("weights"),
@@ -536,6 +530,7 @@ PYBIND11_MODULE(_core, m) {
         .def(
             "add_empirical_relative",
             [](GenericDelayGenerator &g, ActivityType activity_type, std::vector<double> factors, std::vector<double> weights) {
+                g.ensure_unregistered(activity_type);
                 g.dist_map_[activity_type] = EmpiricalRelativeDist{std::move(factors), std::move(weights)};
             },
             py::arg("activity_type"), py::arg("factors"), py::arg("weights"),
