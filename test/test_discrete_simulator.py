@@ -142,23 +142,14 @@ class TestDiscreteSimulator(unittest.TestCase):
             overflow_rule=OverflowRule.TRUNCATE,
         )
 
-        # Should not raise when validation is disabled
+        # Construction can skip context validation, but strict PMF grid checks still apply during propagation.
         sim = create_analytic_propagator(ctx, validate=False)
-        result = sim.run()
-        self.assertEqual(len(result), 3)
+        with self.assertRaises(ValueError):
+            sim.run()
 
     def test_misaligned_values(self) -> None:
-        act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.5]), np.array([0.5, 0.5]), step=1))
-        ctx = AnalyticContext(
-            events=self.events,
-            activities={(0, 1): (0, act0)},
-            precedence_list=((1, ((0, 0),)),),
-            step=1,
-            underflow_rule=UnderflowRule.TRUNCATE,
-            overflow_rule=OverflowRule.TRUNCATE,
-        )
         with self.assertRaises(ValueError):
-            create_analytic_propagator(ctx)
+            DiscretePMF(np.array([1.0, 2.5]), np.array([0.5, 0.5]), step=1)
 
     def test_bounds_and_overflow(self) -> None:
         events = (

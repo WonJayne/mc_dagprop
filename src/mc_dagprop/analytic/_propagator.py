@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 
@@ -10,6 +11,8 @@ from mc_dagprop.types import ActivityIndex, EventIndex, ProbabilityMass, Second
 from . import OverflowRule, UnderflowRule
 from ._context import AnalyticContext, PredecessorTuple, SimulatedEvent, validate_context
 from ._pmf import DiscretePMF
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _build_topology(
@@ -118,9 +121,13 @@ class AnalyticPropagator:
                 # Expect: mass(conv) ≈ mass(pred) * mass(act)
                 m_pred, m_act, m_conv = pred.total_mass, act.total_mass, conv.total_mass
                 if not np.isclose(m_conv, m_pred * m_act, rtol=1e-12, atol=1e-15):
-                    print(
-                        f"[LOSS in CONVOLVE] node={this_node} src={src} "
-                        f"pred={m_pred:.17g} act={m_act:.17g} conv={m_conv:.17g}"
+                    _LOGGER.debug(
+                        "convolution mass drift: node=%s src=%s pred=%s act=%s conv=%s",
+                        this_node,
+                        src,
+                        m_pred,
+                        m_act,
+                        m_conv,
                     )
                 to_combine.append(conv)
 
@@ -131,7 +138,7 @@ class AnalyticPropagator:
                     resulting_pmf = resulting_pmf.maximum(next_pmf)
                 after = resulting_pmf.total_mass
                 if not np.isclose(after, 1.0, rtol=1e-12, atol=1e-15) and all(np.isclose(b, 1.0) for b in before):
-                    print(f"[LOSS in MAXIMUM] node={this_node} inputs={before} after={after:.17g}")
+                    _LOGGER.debug("maximum mass drift: node=%s inputs=%s after=%s", this_node, before, after)
 
             lower_bound, upper_bound = self._event_bounds(ev.timestamp.earliest, ev.timestamp.latest)
             events[this_node] = self._convert_to_simulated_event(resulting_pmf, lower_bound, upper_bound)
@@ -187,7 +194,8 @@ class AnalyticPropagator:
                 new_vals = np.array([min_value], dtype=float)
                 new_probs = np.array([under_mass], dtype=float)
             else:
-                raise ValueError(f"Underflow mass cannot be truncated: no lower-bound bin present. {new_vals=}")
+                new_vals = np.insert(new_vals, 0, float(min_value))
+                new_probs = np.insert(new_probs, 0, float(under_mass))
             under_mass = ProbabilityMass(0.0)
         elif self.underflow_rule == UnderflowRule.REDISTRIBUTE and under_mass > 0.0:
             # keep record of mass but reinsert later proportionally
@@ -204,7 +212,8 @@ class AnalyticPropagator:
                 new_vals = np.array([max_value], dtype=float)
                 new_probs = np.array([over_mass], dtype=float)
             else:
-                raise ValueError("Overflow mass cannot be truncated: no upper-bound bin present.")
+                new_vals = np.append(new_vals, float(max_value))
+                new_probs = np.append(new_probs, float(over_mass))
             over_mass = ProbabilityMass(0.0)
         elif self.overflow_rule == OverflowRule.REDISTRIBUTE and over_mass > 0.0:
             to_redistribute_over = over_mass
@@ -215,7 +224,7 @@ class AnalyticPropagator:
         base_inside = new_probs.sum()
         if to_redistribute > 0.0:
             if base_inside == 0.0:
-                # FIXME: no inside mass to redistribute onto evenly distribute mass?
+                # No inside mass exists, so place redistributed mass on the lower bound.
                 anchor = min_value if np.isfinite(min_value) else max_value
                 new_vals = np.array([anchor], dtype=float)
                 new_probs = np.array([to_redistribute], dtype=float)
@@ -247,7 +256,7 @@ class AnalyticPropagator:
                 new_vals = np.array([anchor], dtype=float)
                 new_probs = np.array([target_inside], dtype=float)
 
-        clipped = DiscretePMF(new_vals, new_probs, step=pmf.step)
+        clipped = DiscretePMF(new_vals, new_probs, step=pmf.step, allow_subprobability=(target_inside < 1.0))
 
         # Invariant sanity-check (tolerant)
         total = clipped.total_mass + under_mass + over_mass
@@ -255,7 +264,7 @@ class AnalyticPropagator:
             # Tighten by a last tiny rescale if we’re microscopically off due to casts
             corr = 1.0 / total if total > 0 else 1.0
             new_probs *= corr
-            clipped = DiscretePMF(new_vals, new_probs, step=pmf.step)
+            clipped = DiscretePMF(new_vals, new_probs, step=pmf.step, allow_subprobability=(target_inside < 1.0))
             total = clipped.total_mass + under_mass + over_mass
             assert np.isclose(total, 1.0, rtol=1e-12, atol=1e-15), f"Mass mismatch after correction: {total=}"
 

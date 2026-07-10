@@ -60,49 +60,48 @@ pip install mc-dagprop
 
 ---
 
-## Quickstart (Monte Carlo)
+## Quickstart (shared construction)
 
 ```python
 from mc_dagprop import (
   Activity,
-  DagContext,
+  AnalyticPropagator,
+  DelayFamilyRegistry,
   Event,
   EventTimestamp,
-  GenericDelayGenerator,
   MonteCarloPropagator,
+  OverflowRule,
+  PropagationContext,
+  UnderflowRule,
 )
 
-# 1) Build your DAG timing context
 events = [
   Event("A", EventTimestamp(0.0, 100.0, 0.0)),
   Event("B", EventTimestamp(10.0, 100.0, 0.0)),
 ]
+activities = {(0, 1): Activity(idx=0, minimal_duration=60.0, activity_type=1)}
+precedence = [(1, [(0, 0)])]
 
-activities = {
-  (0, 1): Activity(idx=0, minimal_duration=60.0, activity_type=1),
-}
+context = PropagationContext(events=events, activities=activities, precedence_list=precedence)
 
-precedence = [
-  (1, [(0, 0)]),
-]
+# Delay families describe stochastic extra delay, not base duration.
+registry = DelayFamilyRegistry()
+registry.add_empirical(activity_type=1, values=[0.0, 10.0], weights=[0.8, 0.2])
 
-ctx = DagContext(
-  events=events,
-  activities=activities,
-  precedence_list=precedence,
+mc = MonteCarloPropagator.from_context(context, registry)
+analytic = AnalyticPropagator.from_context(
+  context,
+  registry,
+  step=1,
+  underflow_rule=UnderflowRule.TRUNCATE,
+  overflow_rule=OverflowRule.TRUNCATE,
 )
 
-# 2) Configure a delay generator (one distribution per activity_type)
-gen = GenericDelayGenerator()
-gen.add_constant(activity_type=1, factor=1.5)
+print(mc.run(seed=42).durations)      # base duration + sampled extra delay
+print(analytic.run()[1].pmf.values)   # full edge-increment PMF shifted by base duration
 
-# 3) Run propagation
-sim = MonteCarloPropagator(ctx, gen)
-result = sim.run(seed=42)
-
-print("Realized times:", result.realized)
-print("Edge durations:", result.durations)
-print("Causal predecessors:", result.cause_event)
+# Unregistered activity types are deterministic: they add no stochastic extra delay.
+# Duplicate registrations are rejected with an error identifying the activity type.
 ```
 
 `Simulator` remains available as a compatibility alias of
@@ -160,6 +159,9 @@ print(pmfs[1].pmf.probabilities)
 
 Notes:
 
+- Shared frontend delay families represent stochastic extra delay. Analytic construction shifts them by each activity's deterministic minimal duration to form full edge-increment PMFs.
+- Unregistered activity types are deterministic in both backends.
+- Duplicate stochastic registrations for the same activity type are rejected; use a fresh registry to change a family.
 - `step` is the shared PMF grid spacing for the analytic context.
 - `create_analytic_propagator(..., validate=True)` validates PMF alignment,
   mass consistency, indices, and DAG acyclicity before running.
@@ -167,8 +169,9 @@ Notes:
   intermediates (`np.longdouble`) and a post-operation mass correction. This
   prevents tiny probabilities from being lost to cumulative floating-point
   drift in deep analytic propagation chains.
-- The analytic backend bounds each event distribution to `[event.earliest, event.latest]`.
+- The analytic backend bounds each event distribution to `[event.earliest, event.latest]`; `latest` is a hard bound.
 - The Monte Carlo backend treats `latest` as semantic metadata and does not cap realised event times.
+- Analytic propagation is marginal PMF propagation. It is not generally exact on reconvergent DAGs with shared stochastic ancestry; full Büker-style conditional convolution / route-conflict handling is intentionally out of scope.
 
 ---
 
