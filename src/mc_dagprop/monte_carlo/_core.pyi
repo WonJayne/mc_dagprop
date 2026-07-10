@@ -40,22 +40,19 @@ class Activity:
 
 class DagContext:
     """
-    Wraps the DAG: a list of events, activities, a precedence list and a
-    max?delay. ``precedence_list`` can be in any order; ``Simulator`` sorts it
+    Wraps the DAG: a list of events, activities, and a precedence list.
+    ``precedence_list`` can be in any order; ``Simulator`` sorts it
     topologically and raises ``RuntimeError`` on cycles.
     """
 
     events: Sequence[Event]
     activities: Mapping[tuple[EventIndex, EventIndex], Activity]
     precedence_list: Sequence[tuple[EventIndex, list[tuple[EventIndex, ActivityIndex]]]]
-    max_delay: Second
-
     def __init__(
         self,
         events: Sequence[Event],
         activities: Mapping[tuple[EventIndex, EventIndex], Activity],
         precedence_list: Sequence[tuple[EventIndex, Sequence[tuple[EventIndex, ActivityIndex]]]],
-        max_delay: Second,
     ) -> None: ...
 
 class SimResult:

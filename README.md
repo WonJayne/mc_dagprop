@@ -39,10 +39,10 @@ which promotes innovative studies in transport management and the future of mobi
   - Empirical absolute/relative
 - Single-run (`run(seed)`) and batched (`run_many(seeds)`) Monte Carlo APIs.
 - Shared DAG concepts (`Event`, `Activity`, `DagContext`) and unified naming.
-- Optional global `max_delay` cap available in both engines.
+- Documented backend semantics in `docs/semantics.md`, including analytic event bounds and Monte Carlo metadata treatment of `latest`.
 
-> **Note:** For Monte Carlo, configuring multiple distributions for the same
-> `activity_type` overrides previous settings. Keep exactly one distribution per type.
+> **Note:** Configuring multiple stochastic delay families for the same
+> `activity_type` is an error. Keep exactly one distribution per type.
 
 ---
 
@@ -90,7 +90,6 @@ ctx = DagContext(
   events=events,
   activities=activities,
   precedence_list=precedence,
-  max_delay=1800.0,
 )
 
 # 2) Configure a delay generator (one distribution per activity_type)
@@ -150,7 +149,6 @@ ctx = AnalyticContext(
   step=step,
   underflow_rule=UnderflowRule.TRUNCATE,
   overflow_rule=OverflowRule.TRUNCATE,
-  max_delay=None,
 )
 
 sim = create_analytic_propagator(ctx)
@@ -169,8 +167,8 @@ Notes:
   intermediates (`np.longdouble`) and a post-operation mass correction. This
   prevents tiny probabilities from being lost to cumulative floating-point
   drift in deep analytic propagation chains.
-- `max_delay` mirrors Monte Carlo semantics by capping each event at
-  `min(latest, earliest + max_delay)`.
+- The analytic backend bounds each event distribution to `[event.earliest, event.latest]`.
+- The Monte Carlo backend treats `latest` as semantic metadata and does not cap realised event times.
 
 ---
 

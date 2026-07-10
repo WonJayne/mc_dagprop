@@ -7,7 +7,7 @@ import numpy as np
 from demo._shared import ExampleConfig, build_example_context
 
 from mc_dagprop import Activity, DagContext, Event, GenericDelayGenerator, Simulator
-from mc_dagprop.types import ActivityType, EventIndex, Second
+from mc_dagprop.types import ActivityType, EventIndex
 
 
 @dataclass(frozen=True)
@@ -15,10 +15,9 @@ class MonteCarloConfig(ExampleConfig):
     """Configuration for the Monte Carlo demonstration."""
 
     trials: int = 1000
-    max_delay: Second = 1800.0
 
 
-def build_mc_simulator(context_cfg: ExampleConfig, max_delay: Second) -> Simulator:
+def build_mc_simulator(context_cfg: ExampleConfig) -> Simulator:
     """Return a :class:`Simulator` mirroring the analytic example."""
 
     analytic_ctx = build_example_context(context_cfg)
@@ -36,7 +35,7 @@ def build_mc_simulator(context_cfg: ExampleConfig, max_delay: Second) -> Simulat
         generator.add_empirical_absolute(ActivityType(edge_idx), pmf.values.tolist(), pmf.probabilities.tolist())
 
     mc_ctx = DagContext(
-        events=events, activities=activities, precedence_list=analytic_ctx.precedence_list, max_delay=max_delay
+        events=events, activities=activities, precedence_list=analytic_ctx.precedence_list
     )
 
     return Simulator(mc_ctx, generator)
@@ -51,7 +50,7 @@ def run_trials(sim: Simulator, seeds: Sequence[int]) -> np.ndarray:
 
 def main() -> None:
     cfg = MonteCarloConfig()
-    sim = build_mc_simulator(cfg, cfg.max_delay)
+    sim = build_mc_simulator(cfg)
     samples = run_trials(sim, range(cfg.trials))
     analytic = build_example_context(cfg)
 

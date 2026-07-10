@@ -17,7 +17,7 @@ def simulate_and_collect(
     events = [Event("A", EventTimestamp(0.0, 0.0, 0.0)), Event("B", EventTimestamp(0.0, 0.0, 0.0))]
     activities = {(0, 1): Activity(idx=ActivityIndex(0), minimal_duration=base_duration, activity_type=ActivityType(1))}
     precedence = [(1, [(0, 0)])]
-    ctx = DagContext(events, activities, precedence, max_delay=1e6)
+    ctx = DagContext(events, activities, precedence)
 
     gen = GenericDelayGenerator()
     if dist_name == "constant":

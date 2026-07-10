@@ -77,9 +77,6 @@ class AnalyticContext:
         step: Discrete time step shared by all distributions.
         underflow_rule: Rule for mass below event lower bounds.
         overflow_rule: Rule for mass above event upper bounds.
-        max_delay: Optional global delay cap relative to each event's earliest
-            time. When set, each event is effectively bounded above by
-            ``min(event.latest, event.earliest + max_delay)``.
     """
 
     events: tuple[Event, ...]
@@ -88,7 +85,6 @@ class AnalyticContext:
     step: Second
     underflow_rule: UnderflowRule
     overflow_rule: OverflowRule
-    max_delay: Second | None = None
 
 
 def validate_context(context: AnalyticContext) -> None:
@@ -102,8 +98,6 @@ def validate_context(context: AnalyticContext) -> None:
 
     if context.step <= 0.0:
         raise ValueError("step_size must be positive")
-    if context.max_delay is not None and context.max_delay < 0.0:
-        raise ValueError("max_delay must be non-negative when provided")
 
     # Validate scheduled events
     for i, ev in enumerate(context.events):
