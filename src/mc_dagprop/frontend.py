@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 from typing import Callable
 
@@ -42,6 +43,8 @@ class DelayFamilyRegistry:
         self._families: dict[ActivityType, _DelayFamily] = {}
 
     def _register(self, activity_type: ActivityType, family: _DelayFamily) -> None:
+        if activity_type == -1:
+            raise ValueError("activity type -1 is reserved as the deterministic no-delay sentinel and cannot be registered")
         if activity_type in self._families:
             raise ValueError(f"delay family already registered for activity type {activity_type}")
         self._families[activity_type] = family
@@ -66,12 +69,39 @@ class DelayFamilyRegistry:
             ),
         )
 
-    def add_exponential(self, activity_type: ActivityType, scale: float, max_scale: float) -> None:
+    def add_exponential(
+        self,
+        activity_type: ActivityType,
+        scale: float | None = None,
+        max_scale: float | None = None,
+        *,
+        lambda_: float | None = None,
+    ) -> None:
+        """Register an exponential stochastic extra-delay family.
+
+        ``scale`` is the exponential mean. ``lambda_`` remains as a deprecated
+        compatibility alias and is interpreted identically to ``scale``.
+        """
+        if scale is None:
+            if lambda_ is None:
+                raise TypeError("add_exponential() missing required argument: 'scale'")
+            warnings.warn(
+                "lambda_ is deprecated; use scale for the exponential mean",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            scale = lambda_
+        elif lambda_ is not None:
+            raise TypeError("use either scale or deprecated lambda_, not both")
+        if max_scale is None:
+            raise TypeError("add_exponential() missing required argument: 'max_scale'")
+        scale_value = float(scale)
+        max_scale_value = float(max_scale)
         self._register(
             activity_type,
             _DelayFamily(
-                lambda generator, t: generator.add_exponential(t, scale, max_scale),
-                lambda base, step: exponential_pmf(base * scale, step, 0, int(math.ceil(base * max_scale / step) * step)),
+                lambda generator, t: generator.add_exponential(t, scale_value, max_scale_value),
+                lambda base, step: exponential_pmf(base * scale_value, step, 0, int(math.ceil(base * max_scale_value / step) * step)),
             ),
         )
 

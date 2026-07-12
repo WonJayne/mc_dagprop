@@ -13,7 +13,7 @@ The package provides two propagation modes:
 - **Analytic** propagation of full discrete probability mass functions (PMFs).
 
 Both engines share the same event/activity DAG model and expose aligned naming:
-`MonteCarloPropagator` and `AnalyticPropagator`.
+`MonteCarloPropagator` and `AnalyticPropagator`. The recommended public construction path is `PropagationContext` plus `DelayFamilyRegistry`, followed by each backend's `from_context(...)` constructor.
 
 ## Background
 
@@ -32,14 +32,14 @@ which promotes innovative studies in transport management and the future of mobi
 
 - **High-performance Monte Carlo core** in C++ via pybind11.
 - **Deterministic analytic propagator** for full event-time PMFs.
-- Custom per-activity-type Monte Carlo delay distributions:
+- Custom per-activity-type stochastic extra-delay distributions:
   - Constant
-  - Exponential
+  - Exponential (`scale` is the mean)
   - Gamma
   - Empirical absolute/relative
 - Single-run (`run(seed)`) and batched (`run_many(seeds)`) Monte Carlo APIs.
 - Shared DAG concepts (`Event`, `Activity`, `DagContext`) and unified naming.
-- Documented backend semantics in `docs/semantics.md`, including analytic event bounds and Monte Carlo metadata treatment of `latest`.
+- Documented backend semantics in `docs/semantics.md`, including analytic hard event bounds, Monte Carlo metadata treatment of `latest`, clipping-policy mass behavior, and marginal propagation limitations.
 
 > **Note:** Configuring multiple stochastic delay families for the same
 > `activity_type` is an error. Keep exactly one distribution per type.
@@ -105,7 +105,7 @@ print(analytic.run()[1].pmf.values)   # full edge-increment PMF shifted by base 
 ```
 
 `Simulator` remains available as a compatibility alias of
-`MonteCarloPropagator`.
+`MonteCarloPropagator`. `max_delay` is no longer part of the public API. For exponential delay families, use `scale` as the mean; `lambda_` exists only as a deprecated compatibility alias.
 
 ---
 
@@ -169,9 +169,10 @@ Notes:
   intermediates (`np.longdouble`) and a post-operation mass correction. This
   prevents tiny probabilities from being lost to cumulative floating-point
   drift in deep analytic propagation chains.
-- The analytic backend bounds each event distribution to `[event.earliest, event.latest]`; `latest` is a hard bound.
+- The analytic backend bounds each event distribution to `[event.earliest, event.latest]`; `latest` is a hard bound. Use `step=1` for exact tests; a coarser `step=3` may be practical for examples when the timetable grid supports it.
+- Clipping policies are explicit: `TRUNCATE` moves mass to the nearest boundary and preserves total mass; `REMOVE` reports removed mass and returns an explicit sub-probability PMF; `REDISTRIBUTE` conditionalizes the retained mass.
 - The Monte Carlo backend treats `latest` as semantic metadata and does not cap realised event times.
-- Analytic propagation is marginal PMF propagation. It is not generally exact on reconvergent DAGs with shared stochastic ancestry; full Büker-style conditional convolution / route-conflict handling is intentionally out of scope.
+- Analytic propagation is marginal PMF propagation. It is not generally exact on reconvergent DAGs with shared stochastic ancestry. A low-level conditional convolution primitive is tested for small PMFs, but full Büker-style route-conflict handling, interlinking/connection modelling, train priorities, and exact joint-distribution propagation are intentionally out of scope.
 
 ---
 

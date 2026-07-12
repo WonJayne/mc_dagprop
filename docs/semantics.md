@@ -20,8 +20,10 @@ assumption implicit in marginal maximum formation. In those cases, analytic and
 Monte Carlo outputs may differ. This is a documented limitation of the current
 marginal implementation, not an implementation bug.
 
-TODO: full Büker-style route-conflict handling requires conditional convolution
-rather than only marginal convolution/maximum operations. That conflict-aware
+A low-level conditional convolution primitive is available for exact, small
+PMF calculations, but it is deliberately not wired into the main propagator.
+Full Büker-style route-conflict handling requires a complete conflict and
+interlinking model in addition to conditional convolution; that conflict-aware
 extension is intentionally out of scope for this pass.
 
 ## Monte Carlo backend
@@ -40,7 +42,10 @@ Unregistered activity types are deterministic and add no stochastic extra delay:
 the activity contributes only its configured minimal duration.
 
 Each stochastic delay family may be registered at most once per activity type.
-Registering a second family for the same activity type is an error.
+Registering a second family for the same activity type is an error. The
+activity type `-1` is reserved as an internal deterministic no-delay sentinel:
+users must not register stochastic delay families for `-1`, and an unregistered
+`-1` activity remains deterministic like any other unregistered type.
 
 ## Activity durations and discrete PMFs
 
@@ -57,3 +62,32 @@ grid-aligned integer-step values and probabilities must be finite,
 non-negative, and normalized unless a policy explicitly creates a documented
 sub-probability result. Analytic `latest` remains a hard clipping bound; Monte
 Carlo `latest` remains metadata and does not cap realised samples.
+
+
+## Clipping policies
+
+Analytic clipping policies have explicit mass semantics:
+
+- `TRUNCATE` moves mass below/above the bound to the nearest boundary bin. If the
+  boundary bin is missing it is inserted; if it already exists the mass is
+  merged. Total PMF mass is preserved.
+- `REMOVE` removes out-of-bound mass without renormalizing retained support. The
+  resulting PMF is an explicit sub-probability PMF, and removed mass is reported
+  as event underflow/overflow. If no support remains inside the event window, a
+  clear error is raised instead of returning an empty PMF.
+- `REDISTRIBUTE` removes out-of-bound mass and renormalizes/conditionalizes the
+  retained support. If no inside support exists, mass is anchored at the lower
+  bound.
+
+Use `step=1` for exact unit tests. A coarser `step=3` can be practical for
+examples or exploratory runs when that grid is appropriate for the timetable.
+
+## Reproducibility
+
+The recommended Monte Carlo reproducibility mechanism is passing `seed` to
+`MonteCarloPropagator.run(seed=...)` or a deterministic seed sequence to
+`run_many(...)`. The lower-level `GenericDelayGenerator.set_seed(...)` remains
+available for direct generator use; a per-run seed resets the propagator's
+reusable generator state for that run.
+
+`max_delay` is no longer part of the public semantics or API.

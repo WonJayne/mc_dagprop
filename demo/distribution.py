@@ -23,7 +23,7 @@ def simulate_and_collect(
     if dist_name == "constant":
         gen.add_constant(ActivityType(1), factor=params["factor"])
     elif dist_name == "exponential":
-        gen.add_exponential(ActivityType(1), lambda_=params["lambda"], max_scale=params["max_scale"])
+        gen.add_exponential(ActivityType(1), scale=params["scale"], max_scale=params["max_scale"])
     elif dist_name == "gamma":
         gen.add_gamma(
             ActivityType(1), shape=params["shape"], scale=params["scale"], max_scale=params.get("max_scale", 1e6)
@@ -45,9 +45,9 @@ def main() -> None:
     configs = {
         "constant": [{"factor": 1.0}, {"factor": 2.0}],
         "exponential": [
-            {"lambda": 0.1, "max_scale": 5.0},
-            {"lambda": 0.5, "max_scale": 5.0},
-            {"lambda": 1.0, "max_scale": 5.0},
+            {"scale": 0.1, "max_scale": 5.0},
+            {"scale": 0.5, "max_scale": 5.0},
+            {"scale": 1.0, "max_scale": 5.0},
         ],
         "gamma": [
             {"shape": 0.1, "scale": 2.5, "max_scale": 3.0},
