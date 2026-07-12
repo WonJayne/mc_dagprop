@@ -117,16 +117,44 @@ class DiscretePMF:
         return m1 * m2
 
     def convolve(self, other: "DiscretePMF") -> "DiscretePMF":
-        """Convolve two PMFs using stable arithmetic and mass correction."""
-        if len(self.values) == 1:
-            pmf = DiscretePMF(other.values + self.values[0], other.probabilities * self.probabilities[0], step=self.step, allow_subprobability=True)
-        elif len(other.values) == 1:
-            pmf = DiscretePMF(self.values + other.values[0], self.probabilities * other.probabilities[0], step=self.step, allow_subprobability=True)
-        else:
-            start = self.values[0] + other.values[0]
-            probs = np.convolve(self.probabilities.astype(np.longdouble), other.probabilities.astype(np.longdouble)).astype(float)
-            values = start + self.step * np.arange(len(probs))
-            pmf = DiscretePMF(values, probs, step=self.step, allow_subprobability=True)
+        """Convolve two PMFs using stable arithmetic and exact sparse support."""
+        self_contiguous = np.allclose(np.diff(self.values), self.step, rtol=0.0, atol=1e-9) if len(self.values) > 1 else True
+        other_contiguous = np.allclose(np.diff(other.values), other.step, rtol=0.0, atol=1e-9) if len(other.values) > 1 else True
+        if self_contiguous and other_contiguous:
+            if len(self.values) == 1:
+                pmf = DiscretePMF(
+                    other.values + self.values[0],
+                    other.probabilities * self.probabilities[0],
+                    step=self.step,
+                    allow_subprobability=True,
+                )
+            elif len(other.values) == 1:
+                pmf = DiscretePMF(
+                    self.values + other.values[0],
+                    self.probabilities * other.probabilities[0],
+                    step=self.step,
+                    allow_subprobability=True,
+                )
+            else:
+                start_value = self.values[0] + other.values[0]
+                probabilities = np.convolve(
+                    self.probabilities.astype(np.longdouble),
+                    other.probabilities.astype(np.longdouble),
+                ).astype(float)
+                values = start_value + self.step * np.arange(len(probabilities))
+                pmf = DiscretePMF(values, probabilities, step=self.step, allow_subprobability=True)
+            return pmf._rescale(self._expected_mass(float(self.total_mass), float(other.total_mass)))
+
+        masses: dict[float, np.longdouble] = {}
+        for self_value, self_probability in zip(self.values, self.probabilities):
+            for other_value, other_probability in zip(other.values, other.probabilities):
+                summed_value = float(self_value + other_value)
+                masses[summed_value] = masses.get(summed_value, np.longdouble(0.0)) + (
+                    np.longdouble(self_probability) * np.longdouble(other_probability)
+                )
+        values = np.array(sorted(masses), dtype=float)
+        probabilities = np.array([masses[value] for value in values], dtype=float)
+        pmf = DiscretePMF(values, probabilities, step=self.step, allow_subprobability=True)
         return pmf._rescale(self._expected_mass(float(self.total_mass), float(other.total_mass)))
 
     def maximum(self, other: "DiscretePMF") -> "DiscretePMF":
@@ -136,13 +164,39 @@ class DiscretePMF:
         grid = np.arange(min_start, max_end + self.step, self.step)
         pmf_self = np.zeros(len(grid), dtype=np.longdouble)
         pmf_other = np.zeros(len(grid), dtype=np.longdouble)
-        off_self = int(round((self.values[0] - min_start) / self.step))
-        off_other = int(round((other.values[0] - min_start) / self.step))
-        pmf_self[off_self : off_self + len(self.probabilities)] = self.probabilities
-        pmf_other[off_other : off_other + len(other.probabilities)] = other.probabilities
+        for value, probability in zip(self.values, self.probabilities):
+            index = int(round((value - min_start) / self.step))
+            pmf_self[index] += np.longdouble(probability)
+        for value, probability in zip(other.values, other.probabilities):
+            index = int(round((value - min_start) / self.step))
+            pmf_other[index] += np.longdouble(probability)
         cdf_self = np.cumsum(pmf_self, dtype=np.longdouble)
         cdf_other = np.cumsum(pmf_other, dtype=np.longdouble)
         cdf_self_prev = np.concatenate((np.array([0.0], dtype=np.longdouble), cdf_self[:-1]))
         probs = pmf_self * cdf_other + pmf_other * cdf_self_prev
         pmf = DiscretePMF(grid, probs.astype(float), step=self.step, allow_subprobability=True)
         return pmf._rescale(self._expected_mass(float(self.total_mass), float(other.total_mass)))
+
+    def conditional_convolve_sum_le(self, other: "DiscretePMF", threshold: Second) -> "DiscretePMF":
+        """Return ``X + Y`` conditioned on ``X + Y <= threshold``.
+
+        This is a low-level primitive for documenting Büker-style conditional
+        convolution semantics. It is intentionally not wired into the main
+        marginal propagator. The returned PMF is normalized over the accepted
+        joint support.
+        """
+        values: list[float] = []
+        probabilities: list[float] = []
+        for self_value, self_probability in zip(self.values, self.probabilities):
+            for other_value, other_probability in zip(other.values, other.probabilities):
+                summed_value = float(self_value + other_value)
+                if summed_value <= threshold:
+                    values.append(summed_value)
+                    probabilities.append(float(self_probability * other_probability))
+        if not values:
+            raise ValueError("conditional convolution has empty support")
+        probability_array = np.array(probabilities, dtype=float)
+        total = probability_array.sum()
+        if total <= 0.0:
+            raise ValueError("conditional convolution has zero accepted probability mass")
+        return DiscretePMF(np.array(values, dtype=float), probability_array / total, step=self.step)
