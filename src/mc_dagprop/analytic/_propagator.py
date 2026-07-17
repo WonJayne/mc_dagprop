@@ -105,10 +105,9 @@ class AnalyticPropagator:
             predecessors = self._predecessors_by_target[this_node]
             is_origin = predecessors is None or len(predecessors) == 0
             if is_origin:
-                base = DiscretePMF.delta(
-                    round(ev.timestamp.earliest / self.context.step) * self.context.step, self.context.step
-                )
-                assert np.isclose(base.total_mass, 1.0)
+                base = DiscretePMF.delta(ev.timestamp.earliest, self.context.step)
+                if not np.isclose(base.total_mass, 1.0):
+                    raise RuntimeError("root PMF construction did not produce unit mass")
                 events[this_node] = SimulatedEvent(base, ProbabilityMass(0.0), ProbabilityMass(0.0))
                 continue
 
@@ -143,15 +142,15 @@ class AnalyticPropagator:
             lower_bound, upper_bound = self._event_bounds(ev.timestamp.earliest, ev.timestamp.latest)
             events[this_node] = self._convert_to_simulated_event(resulting_pmf, lower_bound, upper_bound)
 
-            # Sanity: _convert shouldn't change mass when under/overflow=0
-            assert np.isclose(
-                events[this_node].pmf.total_mass + events[this_node].underflow + events[this_node].overflow,
-                resulting_pmf.total_mass,
-                rtol=1e-12,
-                atol=1e-15,
-            )
+            accounted_mass = events[this_node].pmf.total_mass + events[this_node].underflow + events[this_node].overflow
+            if not np.isclose(accounted_mass, resulting_pmf.total_mass, rtol=1e-12, atol=1e-15):
+                raise RuntimeError(
+                    f"mass mismatch after clipping for event {this_node}: "
+                    f"accounted={accounted_mass}, incoming={resulting_pmf.total_mass}"
+                )
 
-        assert all(events[i] is not None for i in range(n_events)), "Not all events were processed, check context"
+        if not all(events[i] is not None for i in range(n_events)):
+            raise RuntimeError("Not all events were processed, check context")
         return tuple(events[i] for i in range(n_events))
 
     def _event_bounds(self, earliest: Second, latest: Second) -> tuple[int, int]:
@@ -163,7 +162,7 @@ class AnalyticPropagator:
         """Clip pmf to [min_value, max_value] and mass-correct depending on flow rules.
 
         Invariant enforced (up to numerical tolerance):
-            clipped.pmf.total_mass + under_mass + over_mass == 1.0
+            clipped.pmf.total_mass + under_mass + over_mass == incoming mass.
         """
         if min_value > max_value:
             raise ValueError("min_value must not exceed max_value")
@@ -232,40 +231,27 @@ class AnalyticPropagator:
                 # proportional to current inside mass
                 new_probs = new_probs + to_redistribute * (new_probs / base_inside)
 
-        # ---- Final mass correction: normalize → scale to target_inside
+        incoming_mass = float(pmf.total_mass)
+        accounted_mass = float(new_probs.sum() + under_mass + over_mass)
+        if not np.isclose(accounted_mass, incoming_mass, rtol=1e-12, atol=1e-15):
+            raise RuntimeError(
+                f"clipping mass mismatch: accounted={accounted_mass}, incoming={incoming_mass}, "
+                f"underflow={under_mass}, overflow={over_mass}"
+            )
         if new_vals.size == 0:
             raise ValueError(
-                f"PMF must not be empty after clipping, {under_mass=}, {over_mass=}, total_in={pmf.probabilities.sum()}"
+                f"PMF must not be empty after clipping, {under_mass=}, {over_mass=}, total_in={incoming_mass}"
             )
 
-        # target inside mass = 1 - (currently accounted under/over)
-        lost = under_mass + over_mass
-        target_inside = max(0.0, 1.0 - lost)  # guard tiny negative from roundoff
-
-        inside_sum = new_probs.sum()
-        if inside_sum > 0.0:
-            # Step 1: normalize inside to exactly 1.0 (eliminate drift)
-            new_probs /= inside_sum
-            # Step 2: scale to the desired inside mass
-            new_probs *= target_inside
-        else:
-            # No inside support; ensure that we are consistent with target mass
-            # If target_inside > 0, create a delta at nearest feasible bound
-            if target_inside > 0.0:
-                anchor = np.clip(min_value, min_value, max_value)  # use min bound
-                new_vals = np.array([anchor], dtype=float)
-                new_probs = np.array([target_inside], dtype=float)
-
-        clipped = DiscretePMF(new_vals, new_probs, step=pmf.step, allow_subprobability=(target_inside < 1.0))
-
-        # Invariant sanity-check (tolerant)
+        retained_mass = float(new_probs.sum())
+        clipped = DiscretePMF(
+            new_vals,
+            new_probs,
+            step=pmf.step,
+            allow_subprobability=not np.isclose(retained_mass, 1.0, rtol=1e-12, atol=1e-15),
+        )
         total = clipped.total_mass + under_mass + over_mass
-        if not np.isclose(total, 1.0, rtol=1e-12, atol=1e-15):
-            # Tighten by a last tiny rescale if we’re microscopically off due to casts
-            corr = 1.0 / total if total > 0 else 1.0
-            new_probs *= corr
-            clipped = DiscretePMF(new_vals, new_probs, step=pmf.step, allow_subprobability=(target_inside < 1.0))
-            total = clipped.total_mass + under_mass + over_mass
-            assert np.isclose(total, 1.0, rtol=1e-12, atol=1e-15), f"Mass mismatch after correction: {total=}"
+        if not np.isclose(total, incoming_mass, rtol=1e-12, atol=1e-15):
+            raise RuntimeError(f"Mass mismatch after clipping: total={total}, incoming={incoming_mass}")
 
         return SimulatedEvent(clipped, under_mass, over_mass)

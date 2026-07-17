@@ -89,5 +89,3 @@ The recommended Monte Carlo reproducibility mechanism is passing `seed` to
 `run_many(...)`. The lower-level `GenericDelayGenerator.set_seed(...)` remains
 available for direct generator use; a per-run seed resets the propagator's
 reusable generator state for that run.
-
-`max_delay` is no longer part of the public semantics or API.

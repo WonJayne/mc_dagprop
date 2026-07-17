@@ -72,18 +72,9 @@ def test_activity_type_minus_one_is_reserved_for_user_registration() -> None:
         registry.add_constant(activity_type=-1, factor=0.0)
 
 
-def test_unregistered_minus_one_remains_deterministic_zero_extra_delay() -> None:
-    registry = DelayFamilyRegistry()
-    context = _context(activity_type=-1)
-    analytic = AnalyticPropagator.from_context(
-        context,
-        registry,
-        step=1,
-        underflow_rule=UnderflowRule.TRUNCATE,
-        overflow_rule=OverflowRule.TRUNCATE,
-    )
-    np.testing.assert_allclose(analytic.context.activities[(0, 1)][1].pmf.values, [10.0])
-    assert MonteCarloPropagator.from_context(context, registry).run(seed=7).durations[0] == 10.0
+def test_unregistered_minus_one_is_rejected() -> None:
+    with pytest.raises(ValueError, match="activity type -1"):
+        _context(activity_type=-1)
 
 
 def test_frontend_exponential_lambda_alias_warns() -> None:

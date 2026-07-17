@@ -1,5 +1,21 @@
 # Release Notes
 
+## 0.10.0
+
+- Clarified P0 fixed-precedence semantics for OpenBus-derived event-activity DAGs.
+- Kept `max_delay` removed from the functional API.
+- Documented analytic `latest` as a hard bound and Monte Carlo `latest` as metadata only.
+- Added shared `PropagationContext` and `DelayFamilyRegistry` release semantics.
+- Clarified extra-delay families: base/minimal duration is deterministic, registered families add stochastic extra delay, and unregistered activity types are deterministic zero-extra-delay.
+- Rejected duplicate delay-family registrations.
+- Fixed PMF validation and `REMOVE` clipping so sub-probability mass propagates through chains.
+- Added strict analytic grid-alignment validation.
+- Hardened C++/pybind Monte Carlo validation for malformed indices, references, distributions, and parameters.
+- Added OpenBus fixed-precedence integration documentation.
+- Fixed the optional `[plot]` extra metadata.
+- Added installed-wheel smoke testing to the release pipeline.
+- Removed the shipped `py.typed` marker until static typing/stubs are release-clean.
+
 ## Unreleased
 
 ### Build and CI

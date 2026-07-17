@@ -105,7 +105,7 @@ print(analytic.run()[1].pmf.values)   # full edge-increment PMF shifted by base 
 ```
 
 `Simulator` remains available as a compatibility alias of
-`MonteCarloPropagator`. `max_delay` is no longer part of the public API. For exponential delay families, use `scale` as the mean; `lambda_` exists only as a deprecated compatibility alias.
+`MonteCarloPropagator`. For exponential delay families, use `scale` as the mean; `lambda_` exists only as a deprecated compatibility alias.
 
 ---
 
@@ -124,7 +124,7 @@ from mc_dagprop import (
 )
 from mc_dagprop.analytic import AnalyticActivity, exponential_pmf
 
-step = 1.0
+step = 1
 
 delay_pmf = exponential_pmf(scale=10.0, step=step, start=0.0, stop=300.0)
 
@@ -213,3 +213,14 @@ python -m build
 [^1]: Büker, T., et al. (2018). Delay propagation in stochastic railway networks.
 [^2]: Subsequent extensions used in SORRI for timetable robustness analysis.
 [^3]: De Wilde, B., et al. Event-based simulation approaches for railway delay analysis.
+
+
+## Release 0.10 semantics
+
+`mc_dagprop` evaluates fixed-precedence event-activity DAGs. OpenBus constructs operational graphs upstream, resolves or selects resource precedence orders, and passes deterministic or stochastic separation activities into `PropagationContext`. The current kernel evaluates fixed precedence graphs. Dynamic conflict-order selection and dispatching policies are outside `mc_dagprop` and must be represented by alternative graphs or future policy layers.
+
+The analytic backend propagates discrete PMFs on a zero-origin integer grid. `step` must be a positive integer, and event bounds, root times, activity base/minimal durations, and PMF supports must be aligned to that grid. Analytic `latest` is a hard bound: overflow is truncated, redistributed, or removed according to the configured rule. Monte Carlo `latest` is semantic metadata and does not clip samples.
+
+Delay families describe stochastic extra delay. Activity duration is deterministic base/minimal duration plus stochastic extra delay. Unregistered activity types produce deterministic zero extra delay while still contributing the base duration. Registering two stochastic families for the same activity type is an error. For relative exponential and gamma families, `scale` is a relative factor parameter and sampled extra delay is `minimal_duration * sampled_factor`; finite positive `max_scale` is required. Absolute empirical values are extra delays in seconds. The deprecated `lambda_` alias is retained only for compatibility; use `scale`.
+
+See [`docs/openbus_integration.md`](docs/openbus_integration.md), [`docs/semantics.md`](docs/semantics.md), and [`RELEASE_NOTES.md`](RELEASE_NOTES.md).

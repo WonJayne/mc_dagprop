@@ -73,9 +73,8 @@ class TestErrorConditions(BaseContextMixin, unittest.TestCase):
     def test_reserved_activity_type(self) -> None:
         context = self.create_context()
         gen = GenericDelayGenerator()
-        gen.add_constant(-1, 0.0)
         with self.assertRaises(RuntimeError):
-            Simulator(context, gen)
+            gen.add_constant(-1, 0.0)
 
 
 

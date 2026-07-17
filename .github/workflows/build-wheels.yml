@@ -29,6 +29,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
 
+      - name: Run source tests
+        run: |
+          python -m pip install -e . pytest build
+          python -m pytest -q
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
         env:
@@ -38,6 +43,7 @@ jobs:
           CIBW_ARCHS_WINDOWS: auto64
           CIBW_ARCHS_MACOS: x86_64 arm64
           CIBW_BEFORE_BUILD: python -m pip install --upgrade pip wheel
+          CIBW_TEST_COMMAND: python {project}/scripts/smoke_installed_wheel.py
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4

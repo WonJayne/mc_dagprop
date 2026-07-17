@@ -1,7 +1,7 @@
 [project]
 name = "mc-dagprop"
-version = "0.9.1"
-description = "Fast, Monte Carlo DAG propagation simulator with user‑defined delay distributions"
+version = "0.10.0"
+description = "Discrete analytic DAG propagation with Monte Carlo validation backend"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" }
 ]
@@ -15,8 +15,10 @@ license = { text = "MIT" }
 # list of dependencies
 dependencies = [
     "numpy>=2.4.0",
-    "plotly>=6.0.0; extra == 'plot'",
 ]
+
+[project.optional-dependencies]
+plot = ["plotly>=6.0.0"]
 
 [tool.poetry.dependencies]
 numpy = "^2.4.0"
@@ -61,7 +63,6 @@ check_untyped_defs = "True"
 warn_redundant_casts = "True"
 no_implicit_optional = "True"
 strict_optional = "True"
-html_report = "mypy_report"
 
 [tool.pylint]
 ignore = "CVS"
@@ -154,7 +155,6 @@ exclude-protected = "_asdict,_fields,_replace,_source,_make"
 overgeneral-exceptions = "Exception"
 
 [tool.setuptools.package-data]
-"mc_dagprop" = ["py.typed"]
 "mc_dagprop.monte_carlo" = ["*.pyi"]
 
 [tool.setuptools.packages.find]

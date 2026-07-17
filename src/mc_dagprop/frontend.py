@@ -95,23 +95,51 @@ class DelayFamilyRegistry:
             raise TypeError("use either scale or deprecated lambda_, not both")
         if max_scale is None:
             raise TypeError("add_exponential() missing required argument: 'max_scale'")
+        if activity_type in self._families:
+            raise ValueError(f"delay family already registered for activity type {activity_type}")
         scale_value = float(scale)
         max_scale_value = float(max_scale)
+        if not math.isfinite(scale_value) or scale_value <= 0.0:
+            raise ValueError("exponential scale must be finite and positive")
+        if not math.isfinite(max_scale_value) or max_scale_value <= 0.0:
+            raise ValueError("exponential max_scale must be finite and positive")
+
+        def to_exponential_extra_pmf(base: Second, step: int) -> DiscretePMF:
+            if base == 0.0:
+                return constant_pmf(0, step)
+            return exponential_pmf(base * scale_value, step, 0, int(math.ceil(base * max_scale_value / step) * step))
+
         self._register(
             activity_type,
             _DelayFamily(
                 lambda generator, t: generator.add_exponential(t, scale_value, max_scale_value),
-                lambda base, step: exponential_pmf(base * scale_value, step, 0, int(math.ceil(base * max_scale_value / step) * step)),
+                to_exponential_extra_pmf,
             ),
         )
 
-    def add_gamma(self, activity_type: ActivityType, shape: float, scale: float, max_scale: float = math.inf) -> None:
-        stop = max_scale if math.isfinite(max_scale) else shape * scale * 10.0
+    def add_gamma(self, activity_type: ActivityType, shape: float, scale: float, max_scale: float = 10.0) -> None:
+        if activity_type in self._families:
+            raise ValueError(f"delay family already registered for activity type {activity_type}")
+        shape_value = float(shape)
+        scale_value = float(scale)
+        max_scale_value = float(max_scale)
+        if not math.isfinite(shape_value) or shape_value <= 0.0:
+            raise ValueError("gamma shape must be finite and positive")
+        if not math.isfinite(scale_value) or scale_value <= 0.0:
+            raise ValueError("gamma scale must be finite and positive")
+        if not math.isfinite(max_scale_value) or max_scale_value <= 0.0:
+            raise ValueError("gamma max_scale must be finite and positive")
+
+        def to_gamma_extra_pmf(base: Second, step: int) -> DiscretePMF:
+            if base == 0.0:
+                return constant_pmf(0, step)
+            return gamma_pmf(shape_value, base * scale_value, step, 0, int(math.ceil(base * max_scale_value / step) * step))
+
         self._register(
             activity_type,
             _DelayFamily(
-                lambda generator, t: generator.add_gamma(t, shape, scale, max_scale),
-                lambda base, step: gamma_pmf(shape, base * scale, step, 0, int(math.ceil(base * stop / step) * step)),
+                lambda generator, t: generator.add_gamma(t, shape_value, scale_value, max_scale_value),
+                to_gamma_extra_pmf,
             ),
         )
 
@@ -146,14 +174,25 @@ def validate_propagation_context(context: PropagationContext | DagContext) -> No
     for (src, dst), activity in activities.items():
         if not (0 <= src < event_count and 0 <= dst < event_count):
             raise ValueError(f"activity {(src, dst)} references invalid event index")
+        if activity.idx < 0:
+            raise ValueError(f"activity index {activity.idx} must be non-negative")
         if activity.idx in seen_activity_indices:
             raise ValueError(f"duplicate activity index {activity.idx}")
+        if activity.activity_type == -1:
+            raise ValueError("activity type -1 is reserved and cannot be used by user activities")
         seen_activity_indices.add(activity.idx)
         if not math.isfinite(activity.minimal_duration) or activity.minimal_duration < 0.0:
             raise ValueError(f"activity {activity.idx} minimal_duration must be finite and non-negative")
+    if seen_activity_indices != set(range(len(seen_activity_indices))):
+        raise ValueError("activity indices must be contiguous from 0 to n-1")
+
     adjacency: list[list[int]] = [[] for _ in range(event_count)]
     indegree = [0] * event_count
+    seen_targets: set[int] = set()
     for target, predecessors in context.precedence_list:
+        if target in seen_targets:
+            raise ValueError(f"duplicate precedence entry for target {target}")
+        seen_targets.add(target)
         if not (0 <= target < event_count):
             raise ValueError(f"target index {target} out of range")
         for source, activity_index in predecessors:

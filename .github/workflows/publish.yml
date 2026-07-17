@@ -24,13 +24,19 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tooling
-        run: python -m pip install --upgrade pip cibuildwheel build
+        run: python -m pip install --upgrade pip cibuildwheel build pytest
+
+      - name: Run source tests
+        run: |
+          python -m pip install -e .
+          python -m pytest -q
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir dist
         env:
           CIBW_BUILD: "cp312-* cp313-*"
           CIBW_SKIP: "pp* *-musllinux_*"
+          CIBW_TEST_COMMAND: "python {project}/scripts/smoke_installed_wheel.py"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4

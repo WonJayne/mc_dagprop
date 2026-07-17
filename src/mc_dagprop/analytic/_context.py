@@ -96,8 +96,16 @@ def validate_context(context: AnalyticContext) -> None:
 
     n_events = len(context.events)
 
-    if context.step <= 0.0:
+    if not isinstance(context.step, int):
+        raise TypeError(f"step must be an integer number of seconds, got {context.step!r}")
+    if context.step <= 0:
         raise ValueError("step_size must be positive")
+
+    def require_grid_aligned(value: float, label: str) -> None:
+        if not np.isfinite(value):
+            raise ValueError(f"{label} must be finite")
+        if not np.isclose(np.mod(value, context.step), 0.0, rtol=0.0, atol=1e-9):
+            raise ValueError(f"{label}={value!r} is not aligned to analytic step {context.step}")
 
     # Validate scheduled events
     for i, ev in enumerate(context.events):
@@ -106,6 +114,9 @@ def validate_context(context: AnalyticContext) -> None:
             raise ValueError(f"event {i} has earliest > latest")
         if not (ts.earliest <= ts.actual <= ts.latest):
             raise ValueError(f"event {i} actual time outside bounds")
+        require_grid_aligned(ts.earliest, f"event {i} earliest")
+        require_grid_aligned(ts.latest, f"event {i} latest")
+        require_grid_aligned(ts.actual, f"event {i} actual")
 
     # Validate activities and PMFs
     for (src, dst), (edge_idx, edge) in context.activities.items():

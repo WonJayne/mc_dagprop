@@ -7,6 +7,10 @@
 #include <_custom_rng.hpp>
 #include <algorithm>
 #include <limits>
+#include <cmath>
+#include <deque>
+#include <stdexcept>
+#include <unordered_set>
 #include <numeric>
 #include <string>
 #include <type_traits>
@@ -32,6 +36,37 @@ struct hash<pair<A, B>> {
     size_t operator()(pair<A, B> const &p) const noexcept { return hash<A>{}(p.first) ^ (hash<B>{}(p.second) << 1); }
 };
 }  // namespace std
+
+
+static void require_finite_non_negative(double value, const std::string &label) {
+    if (!std::isfinite(value) || value < 0.0) {
+        throw std::runtime_error(label + " must be finite and non-negative");
+    }
+}
+
+static void require_finite_positive(double value, const std::string &label) {
+    if (!std::isfinite(value) || value <= 0.0) {
+        throw std::runtime_error(label + " must be finite and positive");
+    }
+}
+
+static void validate_empirical_inputs(const std::vector<double> &values, const std::vector<double> &weights, const std::string &label) {
+    if (values.empty()) {
+        throw std::runtime_error(label + ": distribution cannot be empty");
+    }
+    if (values.size() != weights.size()) {
+        throw std::runtime_error(label + ": values and weights must have same length");
+    }
+    double total_weight = 0.0;
+    for (size_t i = 0; i < values.size(); ++i) {
+        require_finite_non_negative(values[i], label + ": value at index " + std::to_string(i));
+        require_finite_non_negative(weights[i], label + ": weight at index " + std::to_string(i));
+        total_weight += weights[i];
+    }
+    if (total_weight <= 0.0) {
+        throw std::runtime_error(label + ": weights must have positive total mass");
+    }
+}
 
 // ── Core Data Types ───────────────────────────────────────────────────────
 struct EventTimestamp {
@@ -70,14 +105,17 @@ struct SimResult {
 // ── Delay Distributions ──────────────────────────────────────────────────
 struct ConstantDist {
     double factor;
-    ConstantDist(const double f = 0.0) : factor(f) {}
+    ConstantDist(const double f = 0.0) : factor(f) { require_finite_non_negative(f, "constant delay factor"); }
     double sample(RNG &, const double d) const { return d * factor; }
 };
 
 struct ExponentialDist {
     double scale, max_scale;
     exponential_distribution<double> dist;
-    ExponentialDist(const double sc = 1.0, const double mx = 1.0) : scale(sc), max_scale(mx), dist(1.0 / sc) {}
+    ExponentialDist(const double sc = 1.0, const double mx = 1.0) : scale(sc), max_scale(mx), dist(1.0 / sc) {
+        require_finite_positive(sc, "exponential scale");
+        require_finite_positive(mx, "exponential max_scale");
+    }
     // Sampling updates the distribution state, so this method cannot be const
     double sample(RNG &rng, const double d) {
         double x;
@@ -92,7 +130,11 @@ struct GammaDist {
     double shape, scale, max_scale;
     gamma_distribution<double> dist;
     GammaDist(const double k = 1.0, const double s = 1.0, const double m = numeric_limits<double>::infinity())
-        : shape(k), scale(s), max_scale(m), dist(k, s) {}
+        : shape(k), scale(s), max_scale(m), dist(k, s) {
+        require_finite_positive(k, "gamma shape");
+        require_finite_positive(s, "gamma scale");
+        require_finite_positive(m, "gamma max_scale");
+    }
     // Sampling updates the distribution state, so this method cannot be const
     double sample(RNG &rng, const double d) {
         double x;
@@ -115,8 +157,7 @@ struct EmpiricalAbsoluteDist {
           // build the distribution *after* we’ve checked sizes
           ,
           dist() {
-        if (values.size() != weights.size())
-            throw std::runtime_error("EmpiricalAbsoluteDist: values and weights must have same length");
+        validate_empirical_inputs(values, weights, "EmpiricalAbsoluteDist");
         dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
     }
 
@@ -130,8 +171,7 @@ struct EmpiricalRelativeDist {
     std::discrete_distribution<size_t> dist;
 
     EmpiricalRelativeDist(std::vector<double> facs, std::vector<double> weights) : factors(std::move(facs)), dist() {
-        if (factors.size() != weights.size())
-            throw std::runtime_error("EmpiricalRelativeDist: factors and weights must have same length");
+        validate_empirical_inputs(factors, weights, "EmpiricalRelativeDist");
         dist = std::discrete_distribution<size_t>(weights.begin(), weights.end());
     }
 
@@ -150,14 +190,20 @@ class GenericDelayGenerator {
     GenericDelayGenerator() : rng_(random_device{}()) {}
 
     void set_seed(int s) { rng_.seed(s); }
+    void validate_activity_type(ActivityType t) const {
+        if (t < 0) {
+            throw std::runtime_error("activity type " + std::to_string(t) + " is reserved and cannot be registered");
+        }
+    }
     void ensure_unregistered(ActivityType t) const {
         if (dist_map_.count(t)) {
             throw std::runtime_error("delay family already registered for activity type " + std::to_string(t));
         }
     }
-    void add_constant(ActivityType t, double f) { ensure_unregistered(t); dist_map_[t] = ConstantDist{f}; }
-    void add_exponential(ActivityType t, double scale, double mx) { ensure_unregistered(t); dist_map_[t] = ExponentialDist{scale, mx}; }
+    void add_constant(ActivityType t, double f) { validate_activity_type(t); ensure_unregistered(t); dist_map_[t] = ConstantDist{f}; }
+    void add_exponential(ActivityType t, double scale, double mx) { validate_activity_type(t); ensure_unregistered(t); dist_map_[t] = ExponentialDist{scale, mx}; }
     void add_gamma(ActivityType t, double k, double s, double m = numeric_limits<double>::infinity()) {
+        validate_activity_type(t);
         ensure_unregistered(t);
         dist_map_[t] = GammaDist{k, s, m};
     }
@@ -194,9 +240,68 @@ class Simulator {
     std::vector<double> realized_times_;
     std::vector<EventIndex> causing_event_index_;
 
+    void validate_context() const {
+        const int event_count = int(context_.events.size());
+        for (int i = 0; i < event_count; ++i) {
+            const auto &ts = context_.events[i].ts;
+            if (!std::isfinite(ts.earliest) || !std::isfinite(ts.latest) || !std::isfinite(ts.actual)) {
+                throw std::runtime_error("event " + std::to_string(i) + " times must be finite");
+            }
+        }
+        std::unordered_set<ActivityIndex> seen_activity_indices;
+        for (const auto &kv : context_.activity_map) {
+            const EventIndex src = kv.first.first;
+            const EventIndex dst = kv.first.second;
+            const Activity &activity = kv.second;
+            if (src < 0 || src >= event_count || dst < 0 || dst >= event_count) {
+                throw std::runtime_error("activity " + std::to_string(activity.idx) + " references invalid event index");
+            }
+            if (activity.idx < 0) {
+                throw std::runtime_error("activity index " + std::to_string(activity.idx) + " must be non-negative");
+            }
+            if (activity.activity_type < 0) {
+                throw std::runtime_error("activity " + std::to_string(activity.idx) + " has reserved negative activity type");
+            }
+            require_finite_non_negative(activity.duration, "activity " + std::to_string(activity.idx) + " minimal_duration");
+            if (!seen_activity_indices.insert(activity.idx).second) {
+                throw std::runtime_error("duplicate activity index " + std::to_string(activity.idx));
+            }
+        }
+        for (int expected = 0; expected < int(seen_activity_indices.size()); ++expected) {
+            if (!seen_activity_indices.count(expected)) {
+                throw std::runtime_error("activity indices must be contiguous from 0 to n-1");
+            }
+        }
+        std::unordered_set<EventIndex> seen_targets;
+        for (const auto &entry : context_.precedence_list) {
+            EventIndex target = entry.first;
+            if (target < 0 || target >= event_count) {
+                throw std::runtime_error("target index " + std::to_string(target) + " out of range");
+            }
+            if (!seen_targets.insert(target).second) {
+                throw std::runtime_error("duplicate precedence entry for target " + std::to_string(target));
+            }
+            for (const auto &pred : entry.second) {
+                EventIndex source = pred.first;
+                ActivityIndex activity_index = pred.second;
+                if (source < 0 || source >= event_count) {
+                    throw std::runtime_error("predecessor index " + std::to_string(source) + " out of range");
+                }
+                auto edge = context_.activity_map.find({source, target});
+                if (edge == context_.activity_map.end()) {
+                    throw std::runtime_error("missing activity for predecessor edge");
+                }
+                if (edge->second.idx != activity_index) {
+                    throw std::runtime_error("precedence activity id " + std::to_string(activity_index) + " does not match edge");
+                }
+            }
+        }
+    }
+
 public:
     Simulator(DagContext context, GenericDelayGenerator generator)
         : context_(std::move(context)), rng_(std::random_device{}()) {
+        validate_context();
         // 0) Validate reserved activity_type
         if (generator.dist_map_.count(-1)) {
             throw std::runtime_error("Activity type -1 is reserved for no delay");
@@ -537,6 +642,7 @@ PYBIND11_MODULE(_core, m) {
         .def(
             "add_empirical_absolute",
             [](GenericDelayGenerator &g, ActivityType activity_type, std::vector<double> values, std::vector<double> weights) {
+                g.validate_activity_type(activity_type);
                 g.ensure_unregistered(activity_type);
                 g.dist_map_[activity_type] = EmpiricalAbsoluteDist{std::move(values), std::move(weights)};
             },
@@ -545,6 +651,7 @@ PYBIND11_MODULE(_core, m) {
         .def(
             "add_empirical_relative",
             [](GenericDelayGenerator &g, ActivityType activity_type, std::vector<double> factors, std::vector<double> weights) {
+                g.validate_activity_type(activity_type);
                 g.ensure_unregistered(activity_type);
                 g.dist_map_[activity_type] = EmpiricalRelativeDist{std::move(factors), std::move(weights)};
             },
