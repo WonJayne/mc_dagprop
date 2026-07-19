@@ -36,6 +36,7 @@ jobs:
         env:
           CIBW_BUILD: "cp312-* cp313-*"
           CIBW_SKIP: "pp* *-musllinux_*"
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_TEST_COMMAND: "python {project}/scripts/smoke_installed_wheel.py"
 
       - name: Upload wheels
