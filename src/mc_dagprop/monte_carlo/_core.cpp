@@ -436,10 +436,14 @@ struct GammaDist {
         std::gamma_distribution<double> distribution(shape, 1.0);
         for (int attempt = 0; attempt < FAST_PATH_ATTEMPTS; ++attempt) {
             const double sample = distribution(rng);
-            if (std::isfinite(sample) && sample <= maximum_unit_scale) {
-                const double sample_seconds = scaled_product(sample, scale, d);
-                return clip_continuous_sample_to_interior(sample_seconds, maximum_seconds);
+            if (!std::isfinite(sample)) {
+                continue;
             }
+            if (sample > maximum_unit_scale) {
+                continue;
+            }
+            const double sample_seconds = scaled_product(sample, scale, d);
+            return clip_continuous_sample_to_interior(sample_seconds, maximum_seconds);
         }
         return sample_truncated_gamma(rng, shape, scale, max_scale, d);
     }

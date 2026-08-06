@@ -55,6 +55,15 @@ def test_cpp_coverage_build_creates_installed_metadata() -> None:
     assert "python setup.py build_ext --inplace --force" in quality_workflow
 
 
+def test_quality_builds_native_module_before_unqualified_type_check() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    quality_workflow = (repository_root / ".github" / "workflows" / "quality.yml").read_text(encoding="utf-8")
+
+    native_build = quality_workflow.index("poetry run python setup.py build_ext --inplace --force")
+    openbus_checks = quality_workflow.index("run: ./scripts/check.sh")
+    assert native_build < openbus_checks
+
+
 def test_contributor_entrypoints_use_only_the_openbus_quality_toolchain() -> None:
     repository_root = Path(__file__).resolve().parents[1]
     contributor_entrypoints = (

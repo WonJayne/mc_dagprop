@@ -43,6 +43,12 @@ jobs:
       - name: Install project and development dependencies
         run: poetry install --with dev --extras plot --no-interaction
 
+      # BasedPyright resolves the checked-out package before site-packages. Build
+      # its native runtime module beside the tracked stub so the unqualified
+      # reportMissingModuleSource diagnostic remains enabled and meaningful.
+      - name: Build native module for source-tree type resolution
+        run: poetry run python setup.py build_ext --inplace --force
+
       - name: Run formatting, linting, and public typing checks
         run: ./scripts/check.sh
 
