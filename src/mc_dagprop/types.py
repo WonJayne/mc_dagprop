@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import NewType
+__all__ = ["ActivityIndex", "ActivityType", "EventId", "EventIndex", "ProbabilityMass", "Second"]
 
-__all__ = ["Second", "ProbabilityMass", "ActivityIndex", "EventIndex", "ActivityType", "EventId"]
+Second = float
+ProbabilityMass = float
 
-Second = NewType("Second", float)
-ProbabilityMass = NewType("ProbabilityMass", float)
-
-ActivityIndex = NewType("ActivityIndex", int)
-EventIndex = NewType("EventIndex", int)
-ActivityType = NewType("ActivityType", int)
-EventId = NewType("EventId", str)
+ActivityIndex = int
+EventIndex = int
+ActivityType = int
+EventId = str

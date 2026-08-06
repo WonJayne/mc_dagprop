@@ -1,4 +1,3 @@
-# encoding: utf-8
 from collections import defaultdict
 from collections.abc import Collection
 
@@ -51,7 +50,7 @@ def plot_activity_delays(context: DagContext, results: Collection[SimResult]) ->
     if n_types == 0:
         raise ValueError("No activity types found in context.activities")
 
-    # create 2 × n_types subplot grid
+    # create a two-row subplot grid for every activity type
     fig = make_subplots(
         rows=2,
         cols=n_types,
@@ -67,7 +66,7 @@ def plot_activity_delays(context: DagContext, results: Collection[SimResult]) ->
         fig.add_trace(go.Histogram(x=rel_all[t], name=f"rel t={t}", showlegend=False), row=2, col=idx)
 
         fig.update_xaxes(title_text="sec", row=1, col=idx)
-        fig.update_xaxes(title_text="× base", row=2, col=idx)
+        fig.update_xaxes(title_text="times base", row=2, col=idx)
 
     fig.update_layout(
         height=600,

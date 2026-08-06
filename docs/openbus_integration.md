@@ -13,4 +13,10 @@ A resource precedence activity is just an activity:
 
 Unregistered activity types therefore still contribute deterministic `minimal_duration`; registered delay families add stochastic extra delay only. The graph must be acyclic.
 
+Activity types must be non-negative. OpenBus should set `earliest` to the event's
+release time, `latest` to the analytic hard bound, and `actual` to reference
+metadata within that interval. For cross-backend validation, OpenBus must call
+`validate_equivalence_domain(...)`; event bounds must be nonbinding and incoming
+branches at a merge must not share stochastic activity ancestry.
+
 The current kernel evaluates fixed precedence graphs. Dynamic conflict-order selection and dispatching policies are outside `mc_dagprop` and must be represented by alternative graphs or future policy layers.

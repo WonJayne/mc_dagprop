@@ -175,7 +175,6 @@ def test_many_links_chain_parity() -> None:
     _assert_distribution_parity(analytic_output, samples, ParityTolerance(probability_atol=0.03, mean_atol=0.2))
 
 
-
 def test_analytic_latest_is_hard_bound() -> None:
     values = np.array([3.0, 4.0, 5.0, 6.0])
     probabilities = np.array([0.25, 0.25, 0.3, 0.2])
@@ -232,8 +231,8 @@ def test_duplicate_delay_family_registration_raises_error() -> None:
         generator.add_exponential(1, 1.0, 2.0)
 
 
-def test_reconvergent_shared_ancestry_documents_marginal_maximum_non_equivalence() -> None:
-    """Analytic maximum treats equal marginals as independent after a shared stochastic ancestor."""
+def test_reconvergent_shared_stochastic_ancestry_is_rejected() -> None:
+    """Exact analytic propagation rejects dependent marginals at reconvergence."""
 
     values = np.array([0.0, 1.0])
     probabilities = np.array([0.5, 0.5])
@@ -254,24 +253,5 @@ def test_reconvergent_shared_ancestry_documents_marginal_maximum_non_equivalence
         underflow_rule=UnderflowRule.TRUNCATE,
         overflow_rule=OverflowRule.TRUNCATE,
     )
-    analytic_pmf = create_analytic_propagator(analytic_context).run()[4].pmf
-
-    mc_context = DagContext(
-        events=list(events),
-        activities={
-            (0, 1): Activity(idx=0, minimal_duration=0.0, activity_type=1),
-            (1, 2): Activity(idx=1, minimal_duration=0.0, activity_type=99),
-            (1, 3): Activity(idx=2, minimal_duration=0.0, activity_type=99),
-            (2, 4): Activity(idx=3, minimal_duration=0.0, activity_type=99),
-            (3, 4): Activity(idx=4, minimal_duration=0.0, activity_type=99),
-        },
-        precedence_list=[(1, [(0, 0)]), (2, [(1, 1)]), (3, [(1, 2)]), (4, [(2, 3), (3, 4)])],
-    )
-    generator = GenericDelayGenerator()
-    generator.add_empirical_absolute(1, values.tolist(), probabilities.tolist())
-    simulator = MonteCarloPropagator(mc_context, generator)
-    samples = np.array([simulator.run(seed).realized[4] for seed in range(12_000)])
-
-    assert analytic_pmf.values.tolist() == [0.0, 1.0]
-    np.testing.assert_allclose(analytic_pmf.probabilities, [0.25, 0.75])
-    assert np.mean(samples == 1.0) == pytest.approx(0.5, abs=0.03)
+    with pytest.raises(ValueError, match="disjoint stochastic ancestry at merge 4"):
+        create_analytic_propagator(analytic_context)

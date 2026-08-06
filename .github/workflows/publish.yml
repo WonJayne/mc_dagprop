@@ -1,76 +1,157 @@
-name: Build wheels & publish
+name: Publish release distributions
 
 on:
   push:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
+  validate_tag:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Require tag and package version to match
+        run: python scripts/check_release_tag.py "${{ github.ref_name }}"
+
+  quality_gate:
+    name: Quality and coverage gates
+    needs: validate_tag
+    uses: ./.github/workflows/quality.yml
+    permissions:
+      contents: read
+
+  sanitizer_gate:
+    name: C++ sanitizer gates
+    needs: validate_tag
+    uses: ./.github/workflows/sanitizers.yml
+    permissions:
+      contents: read
+
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Wheels (${{ matrix.platform }})
+    needs: validate_tag
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+            arch: x86_64
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            arch: aarch64
+          - platform: windows-amd64
+            runner: windows-latest
+            arch: AMD64
+          - platform: macos-x86_64
+            runner: macos-15-intel
+            arch: x86_64
+          - platform: macos-arm64
+            runner: macos-15
+            arch: arm64
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install build tooling
-        run: python -m pip install --upgrade pip cibuildwheel build pytest
-
-      - name: Run source tests
-        run: |
-          python -m pip install -e .
-          python -m pytest -q
-
-      - name: Build wheels
-        run: python -m cibuildwheel --output-dir dist
+      - name: Build and test wheels outside the checkout
+        uses: pypa/cibuildwheel@v4.2.0
         env:
-          CIBW_BUILD: "cp312-* cp313-*"
-          CIBW_SKIP: "pp* *-musllinux_*"
+          CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_BUILD: cp312-* cp313-* cp314-*
+          CIBW_BUILD_FRONTEND: build
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-          CIBW_TEST_COMMAND: "python {project}/scripts/smoke_installed_wheel.py"
+          CIBW_SKIP: pp* *-musllinux_*
+          CIBW_TEST_COMMAND: >-
+            python -I {project}/scripts/smoke_installed_distribution.py
+            --source-root {project}
 
-      - name: Upload wheels
+      - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
-          path: dist/*.whl
+          name: wheels-${{ matrix.platform }}
+          path: wheelhouse/*.whl
 
   build_sdist:
-    name: Build sdist
+    name: Build source distribution
+    needs: validate_tag
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Build sdist
+      - name: Build and inspect source distribution
         run: |
-          python -m pip install --upgrade pip build
+          python -m pip install --disable-pip-version-check build twine
           python -m build --sdist --outdir dist
+          python -m twine check dist/*.tar.gz
 
-      - name: Upload sdist
+      - name: Upload source distribution artifact
         uses: actions/upload-artifact@v4
         with:
           name: sdist
           path: dist/*.tar.gz
 
+  test_sdist:
+    name: Sdist (${{ matrix.platform }}, Python ${{ matrix.python }})
+    needs: build_sdist
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
+        platform: [linux-x86_64, linux-arm64, windows-amd64, macos-x86_64, macos-arm64]
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          - platform: windows-amd64
+            runner: windows-latest
+          - platform: macos-x86_64
+            runner: macos-15-intel
+          - platform: macos-arm64
+            runner: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Download source distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+
+      - name: Install and test source distribution outside the checkout
+        shell: bash
+        run: python scripts/test_installed_artifact.py dist/*.tar.gz
+
   publish:
     name: Publish to PyPI
-    needs: [build_wheels, build_sdist]
+    needs: [build_wheels, test_sdist, quality_gate, sanitizer_gate]
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -78,11 +159,16 @@ jobs:
       contents: read
 
     steps:
-      - name: Download artifacts
+      - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+
+      - name: Validate distribution metadata
+        run: |
+          python -m pip install --disable-pip-version-check twine
+          python -m twine check dist/*
 
       - name: Publish distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

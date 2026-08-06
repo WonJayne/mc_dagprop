@@ -25,19 +25,20 @@ from mc_dagprop.analytic._pmf import DiscretePMF
 
 def _context(activity_type: int = 1, latest: float = 1_000.0) -> PropagationContext:
     return PropagationContext(
-        events=(
-            Event("a", EventTimestamp(0.0, latest, 0.0)),
-            Event("b", EventTimestamp(0.0, latest, 0.0)),
-        ),
+        events=(Event("a", EventTimestamp(0.0, latest, 0.0)), Event("b", EventTimestamp(0.0, latest, 0.0))),
         activities={(0, 1): Activity(0, 10.0, activity_type)},
         precedence_list=((1, ((0, 0),)),),
     )
 
 
 def _clip_result(pmf: DiscretePMF, underflow_rule: UnderflowRule, overflow_rule: OverflowRule):
+    activity_offset = max(0.0, -float(pmf.values[0]))
     ctx = AnalyticContext(
-        events=(Event("a", EventTimestamp(0, 100, 0)), Event("b", EventTimestamp(0, 10, 0))),
-        activities={(0, 1): (0, AnalyticActivity(0, pmf))},
+        events=(
+            Event("a", EventTimestamp(-activity_offset, 100, -activity_offset)),
+            Event("b", EventTimestamp(0, 10, 0)),
+        ),
+        activities={(0, 1): (0, AnalyticActivity(0, pmf.shift(activity_offset)))},
         precedence_list=((1, ((0, 0),)),),
         step=1,
         underflow_rule=underflow_rule,
@@ -52,39 +53,40 @@ def _clip_result(pmf: DiscretePMF, underflow_rule: UnderflowRule, overflow_rule:
         ("add_constant", {"factor": 0.0}, "add_empirical", {"values": [0], "weights": [1]}),
         ("add_empirical", {"values": [0], "weights": [1]}, "add_gamma", {"shape": 2.0, "scale": 1.0}),
         ("add_gamma", {"shape": 2.0, "scale": 1.0}, "add_exponential", {"scale": 1.0, "max_scale": 2.0}),
-        ("add_exponential", {"lambda_": 1.0, "max_scale": 2.0}, "add_constant", {"factor": 0.0}),
+        ("add_exponential", {"scale": 1.0, "max_scale": 2.0}, "add_constant", {"factor": 0.0}),
     ],
 )
-def test_duplicate_registration_across_family_types_and_aliases(first: str, first_args: dict[str, object], second: str, second_args: dict[str, object]) -> None:
+def test_duplicate_registration_across_family_types(
+    first: str, first_args: dict[str, object], second: str, second_args: dict[str, object]
+) -> None:
     registry = DelayFamilyRegistry()
-    if "lambda_" in first_args:
-        with pytest.warns(DeprecationWarning, match="lambda_"):
-            getattr(registry, first)(activity_type=5, **first_args)
-    else:
-        getattr(registry, first)(activity_type=5, **first_args)
+    getattr(registry, first)(activity_type=5, **first_args)
     with pytest.raises(ValueError, match="activity type 5"):
         getattr(registry, second)(activity_type=5, **second_args)
 
 
-def test_activity_type_minus_one_is_reserved_for_user_registration() -> None:
+def test_activity_type_minus_one_is_rejected_for_registration() -> None:
     registry = DelayFamilyRegistry()
-    with pytest.raises(ValueError, match="activity type -1"):
+    with pytest.raises(ValueError, match="non-negative"):
         registry.add_constant(activity_type=-1, factor=0.0)
 
 
 def test_unregistered_minus_one_is_rejected() -> None:
-    with pytest.raises(ValueError, match="activity type -1"):
+    with pytest.raises(ValueError, match="non-negative"):
         _context(activity_type=-1)
 
 
-def test_frontend_exponential_lambda_alias_warns() -> None:
+def test_frontend_exponential_lambda_alias_is_removed() -> None:
     registry = DelayFamilyRegistry()
-    with pytest.warns(DeprecationWarning, match="lambda_"):
+    with pytest.raises(TypeError):
         registry.add_exponential(activity_type=1, lambda_=1.0, max_scale=2.0)
 
 
 def test_package_root_imports_work_in_subprocess() -> None:
-    code = "from mc_dagprop import PropagationContext, DelayFamilyRegistry, MonteCarloPropagator, AnalyticPropagator; print('ok')"
+    code = (
+        "from mc_dagprop import "
+        "PropagationContext, DelayFamilyRegistry, MonteCarloPropagator, AnalyticPropagator; print('ok')"
+    )
     completed = subprocess.run([sys.executable, "-c", code], check=True, text=True, capture_output=True)
     assert completed.stdout.strip() == "ok"
 
@@ -96,9 +98,7 @@ def test_pmf_shift_supports_positive_and_negative_offsets() -> None:
 
 
 def test_pmf_convolution_exact_dirac_shift_and_mass() -> None:
-    result = DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1).convolve(
-        DiscretePMF.delta(10.0, step=1)
-    )
+    result = DiscretePMF(np.array([0.0, 1.0]), np.array([0.5, 0.5]), step=1).convolve(DiscretePMF.delta(10.0, step=1))
     np.testing.assert_allclose(result.values, [10.0, 11.0])
     np.testing.assert_allclose(result.probabilities, [0.5, 0.5])
     assert result.total_mass == pytest.approx(1.0)
@@ -112,8 +112,8 @@ def test_pmf_maximum_and_dirac_lower_bound_excess() -> None:
     np.testing.assert_allclose(result.probabilities, [0.0, 0.25, 0.75])
 
     bounded = DiscretePMF(np.array([0.0, 3.0]), np.array([0.25, 0.75]), step=1).maximum(DiscretePMF.delta(2.0, step=1))
-    np.testing.assert_allclose(bounded.values, [0.0, 1.0, 2.0, 3.0])
-    np.testing.assert_allclose(bounded.probabilities, [0.0, 0.0, 0.25, 0.75])
+    np.testing.assert_allclose(bounded.values, [0.0, 2.0, 3.0])
+    np.testing.assert_allclose(bounded.probabilities, [0.0, 0.25, 0.75])
 
 
 def test_conditional_convolution_sum_le_matches_direct_enumeration() -> None:
@@ -148,10 +148,58 @@ def test_truncate_remove_and_redistribute_clipping_mass_semantics() -> None:
     assert redistributed.overflow == pytest.approx(0.0)
 
 
-def test_empty_support_after_remove_raises_clear_error() -> None:
-    pmf = DiscretePMF(np.array([-2.0, 12.0]), np.array([0.5, 0.5]), step=1)
-    with pytest.raises(ValueError, match="PMF must not be empty after clipping"):
-        _clip_result(pmf, UnderflowRule.REMOVE, OverflowRule.REMOVE)
+@pytest.mark.parametrize(
+    ("values", "probabilities", "expected_values", "expected_underflow", "expected_overflow"),
+    [
+        ([-2.0, -1.0], [0.25, 0.75], [0.0], 1.0, 0.0),
+        ([11.0, 12.0], [0.25, 0.75], [10.0], 0.0, 1.0),
+        ([-2.0, 12.0], [0.5, 0.5], [0.0, 10.0], 0.5, 0.5),
+    ],
+    ids=["underflow-only", "overflow-only", "both-sides"],
+)
+def test_remove_with_no_retained_mass_returns_explicit_zero_mass_sub_pmf(
+    values: list[float],
+    probabilities: list[float],
+    expected_values: list[float],
+    expected_underflow: float,
+    expected_overflow: float,
+) -> None:
+    pmf = DiscretePMF(np.array(values), np.array(probabilities), step=1)
+    result = _clip_result(pmf, UnderflowRule.REMOVE, OverflowRule.REMOVE)
+
+    np.testing.assert_array_equal(result.pmf.values, expected_values)
+    np.testing.assert_array_equal(result.pmf.probabilities, np.zeros(len(expected_values)))
+    assert result.pmf.total_mass == 0.0
+    assert result.underflow == pytest.approx(expected_underflow)
+    assert result.overflow == pytest.approx(expected_overflow)
+
+
+def test_all_removed_sub_probability_propagates_through_a_downstream_activity() -> None:
+    events = (
+        Event("root", EventTimestamp(0.0, 0.0, 0.0)),
+        Event("removed", EventTimestamp(0.0, 0.0, 0.0)),
+        Event("downstream", EventTimestamp(0.0, 10.0, 0.0)),
+    )
+    context = AnalyticContext(
+        events,
+        {
+            (0, 1): (0, AnalyticActivity(0, DiscretePMF.delta(1.0, step=1))),
+            (1, 2): (1, AnalyticActivity(1, DiscretePMF.delta(1.0, step=1))),
+        },
+        ((1, ((0, 0),)), (2, ((1, 1),))),
+        1,
+        UnderflowRule.REMOVE,
+        OverflowRule.REMOVE,
+    )
+
+    result = create_analytic_propagator(context).run()
+
+    np.testing.assert_array_equal(result[1].pmf.values, [0.0])
+    np.testing.assert_array_equal(result[1].pmf.probabilities, [0.0])
+    assert result[1].overflow == 1.0
+    np.testing.assert_array_equal(result[2].pmf.values, [1.0])
+    np.testing.assert_array_equal(result[2].pmf.probabilities, [0.0])
+    assert result[2].pmf.total_mass == 0.0
 
 
 def test_normal_frontend_propagation_is_quiet(capsys: pytest.CaptureFixture[str]) -> None:
@@ -159,11 +207,7 @@ def test_normal_frontend_propagation_is_quiet(capsys: pytest.CaptureFixture[str]
     context = _context(activity_type=99)
     MonteCarloPropagator.from_context(context, registry).run(seed=1)
     AnalyticPropagator.from_context(
-        context,
-        registry,
-        step=1,
-        underflow_rule=UnderflowRule.TRUNCATE,
-        overflow_rule=OverflowRule.TRUNCATE,
+        context, registry, step=1, underflow_rule=UnderflowRule.TRUNCATE, overflow_rule=OverflowRule.TRUNCATE
     ).run()
     captured = capsys.readouterr()
     assert captured.out == ""

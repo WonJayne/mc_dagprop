@@ -11,11 +11,11 @@ class TestSimulator(unittest.TestCase):
     def setUp(self) -> None:
         self.events = [
             Event("0", EventTimestamp(0.0, 100.0, 0.0)),
-            Event("1", EventTimestamp(5.0, 100.0, 0.0)),
-            Event("2", EventTimestamp(10.0, 100.0, 0.0)),
-            Event("3", EventTimestamp(22.0, 100.0, 0.0)),
-            Event("4", EventTimestamp(20.0, 100.0, 0.0)),
-            Event("5", EventTimestamp(100.0, 100.0, 0.0)),
+            Event("1", EventTimestamp(5.0, 100.0, 5.0)),
+            Event("2", EventTimestamp(10.0, 100.0, 10.0)),
+            Event("3", EventTimestamp(22.0, 100.0, 22.0)),
+            Event("4", EventTimestamp(20.0, 100.0, 20.0)),
+            Event("5", EventTimestamp(100.0, 100.0, 100.0)),
         ]
 
         # 2 links: (src, dst) -> Activity
@@ -30,9 +30,7 @@ class TestSimulator(unittest.TestCase):
         # Precedence: node_idx ? [(pred_idx, link_idx)]
         self.precedence_list = [(1, [(0, 0)]), (2, [(1, 1)]), (3, [(1, 2)]), (4, [(2, 3), (3, 4)])]
 
-        self.context = DagContext(
-            events=self.events, activities=self.link_map, precedence_list=self.precedence_list
-        )
+        self.context = DagContext(events=self.events, activities=self.link_map, precedence_list=self.precedence_list)
 
     def test_constant_via_generic(self):
         gen = GenericDelayGenerator()
@@ -63,9 +61,7 @@ class TestSimulator(unittest.TestCase):
 
     def test_unsorted_precedence_same_result(self):
         unsorted = list(reversed(self.precedence_list))
-        ctx_unsorted = DagContext(
-            events=self.events, activities=self.link_map, precedence_list=unsorted
-        )
+        ctx_unsorted = DagContext(events=self.events, activities=self.link_map, precedence_list=unsorted)
 
         gen_a = GenericDelayGenerator()
         gen_a.add_constant(activity_type=1, factor=1.0)
@@ -86,7 +82,7 @@ class TestSimulator(unittest.TestCase):
         gen = GenericDelayGenerator()
         gen.add_exponential(1, 1000.0, max_scale=1.0)
         sim = Simulator(self.context, gen)
-        for idx, res in enumerate(sim.run_many(tuple(range(3)))):
+        for res in sim.run_many(tuple(range(3))):
             r = list(res.realized)
             deltas = list(res.durations)
 
@@ -174,12 +170,10 @@ class TestSimulator(unittest.TestCase):
 
 class LargeScaleTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.events = [Event(str(i), EventTimestamp(float(i), 100.0 + i, 0.0)) for i in range(10_000)]
+        self.events = [Event(str(i), EventTimestamp(float(i), 100.0 + i, float(i))) for i in range(10_000)]
         self.link_map = {(i, i + 1): Activity(idx=i, minimal_duration=3.0, activity_type=1) for i in range(9999)}
         self.precedence_list = [(i, [(i - 1, i - 1)]) for i in range(1, 10_000)]
-        self.context = DagContext(
-            events=self.events, activities=self.link_map, precedence_list=self.precedence_list
-        )
+        self.context = DagContext(events=self.events, activities=self.link_map, precedence_list=self.precedence_list)
 
     def test_large_scale_simulation(self):
         gen = GenericDelayGenerator()
@@ -207,7 +201,9 @@ class LargeScaleTest(unittest.TestCase):
         seeds_batches = [[i + j for i in range(1000)] for j in range(batches)]
         with ThreadPoolExecutor(max_workers=batches) as pool:
             results = list(
-                chain.from_iterable(pool.map(lambda args: args[0].run_many(args[1]), zip(sims, seeds_batches)))
+                chain.from_iterable(
+                    pool.map(lambda args: args[0].run_many(args[1]), zip(sims, seeds_batches, strict=True))
+                )
             )
             for result in results:
                 self.assertEqual(len(result.realized), 10000)

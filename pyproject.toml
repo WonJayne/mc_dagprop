@@ -1,21 +1,31 @@
 [project]
 name = "mc-dagprop"
-version = "0.10.0"
+version = "1.0.0rc1"
 description = "Discrete analytic DAG propagation with Monte Carlo validation backend"
 authors = [
-    { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" }
+    { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Typing :: Typed",
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.15"
 readme = "README.md"
-license = { text = "MIT" }
-
-# list of dependencies
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 dependencies = [
     "numpy>=2.4.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/WonJayne/mc_dagprop"
+Documentation = "https://github.com/WonJayne/mc_dagprop/blob/main/docs/semantics.md"
+Issues = "https://github.com/WonJayne/mc_dagprop/issues"
 
 [project.optional-dependencies]
 plot = ["plotly>=6.0.0"]
@@ -23,140 +33,110 @@ plot = ["plotly>=6.0.0"]
 [tool.poetry.dependencies]
 numpy = "^2.4.0"
 
-[tool.poetry.extras]
-plot = ["plotly"]
-
 [tool.poetry.group.dev.dependencies]
+basedpyright = "~1.38.2"
 black = "^25.12.0"
+build = "^1.3.0"
 pytest = "^8.3.5"
+pytest-cov = "^7.0.0"
+ruff = "0.15.6"
+twine = "^6.2.0"
 
 [build-system]
 requires = [
-    "setuptools>=61.0,<77",
+    "setuptools>=77,<83",
     "wheel",
-    "pybind11>=2.13"
+    "pybind11>=2.13",
 ]
 build-backend = "setuptools.build_meta"
 
 [tool.black]
 line-length = 120
-skip-magic-trailing-comma = "True"
-target-version = ["py311", "py312", "py313"]
-exclude = "/(\n    \\.eggs\n  | \\.git\n  | \\.hg\n  | \\.mypy_cache\n  | \\.tox\n  | \\.venv\n  | _build\n  | buck-out\n  | build\n | venv\n  | build_venv\n | dist\n)/\n"
+skip-magic-trailing-comma = true
+target-version = ["py312", "py313", "py314"]
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | __pycache__
+  | _build
+  | buck-out
+  | build
+  | build_venv
+  | dist
+  | venv
+)/
+'''
 
-[tool.isort]
-profile = "black"
-line_length = 120
-src_paths = ["src", "test", ]
-skip_glob = ["venv/*", "build_venv/*", ]
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+force-exclude = true
+src = ["src", "test", "demo", "scripts"]
+extend-exclude = ["build", "dist"]
 
-[tool.flake8]
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "B",
+    "I",
+    "UP",
+    "C4",
+    "PLC0415",
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"test/**/*.py" = ["S101"]
+
+[tool.ruff.lint.pycodestyle]
 max-line-length = 120
-exclude = ".git,__pycache__,docs/source/conf.py,build,dist,tests"
-ignore = "I101,D100,D101,D102,D103,D104,D105,D107,D401,E203,I900,N802,N806,N812,W503,S311,S605,S607,ISC003,ISC001,T101,T000,F541,PL123"
-per-file-ignores = "__init__.py:F401,F403"
 
-[tool.mypy]
-ignore_missing_imports = "True"
-disallow_untyped_defs = "True"
-check_untyped_defs = "True"
-warn_redundant_casts = "True"
-no_implicit_optional = "True"
-strict_optional = "True"
+[tool.basedpyright]
+pythonVersion = "3.12"
+typeCheckingMode = "recommended"
+include = ["src/mc_dagprop", "typing_tests"]
+exclude = ["**/__pycache__", "build", "dist"]
+executionEnvironments = [
+    { root = ".", extraPaths = ["src"] },
+]
+reportUnknownParameterType = "none"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportMissingTypeStubs = "none"
+reportImplicitStringConcatenation = "none"
 
-[tool.pylint]
-ignore = "CVS"
-persistent = "yes"
-jobs = 4
-unsafe-load-any-extension = "no"
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+testpaths = ["test"]
+markers = [
+    "slow: expensive tests executed only when explicitly requested",
+]
 
-[tool.pylint."MESSAGES CONTROL"]
-disable = "C0114,C0116,C0115,C0201,R0904,R0903,W1514"
+[tool.coverage.run]
+branch = true
+source = ["mc_dagprop"]
 
-[tool.pylint.reports]
-output-format = "text"
-reports = "no"
-
-[tool.pylint.logging]
-logging-modules = "logging"
-
-[tool.pylint.variables]
-init-import = "no"
-dummy-variables-rgx = "_$|dummy"
-callbacks = "cb_,_cb"
-
-[tool.pylint.typecheck]
-ignore-mixin-members = "yes"
-ignored-modules = "grcp*,gurobipy,pycryptosat"
-
-[tool.pylint.similarities]
-min-similarity-lines = 4
-ignore-comments = "yes"
-ignore-docstrings = "yes"
-ignore-imports = "no"
-
-[tool.pylint.miscellaneous]
-notes = "FIXME,TODO"
-
-[tool.pylint.spelling]
-spelling-store-unknown-words = "no"
-
-[tool.pylint.format]
-max-line-length = 120
-ignore-long-lines = "^\\s*(# )?<?https?://\\S+>?$"
-single-line-if-stmt = "no"
-max-module-lines = 1000
-indent-string = "    "
-indent-after-paren = 4
-
-[tool.pylint.basic]
-good-names = "i,j,k,_,lb,ub,dt,db"
-bad-names = "foo,bar,baz,toto,tutu,tata,test,l"
-include-naming-hint = "True"
-variable-rgx = "[a-z_][a-z0-9_]{2,30}$"
-class-rgx = "[A-Z_][a-zA-Z0-9]+$"
-attr-rgx = "[a-z_][a-z0-9_]{1,30}$"
-method-rgx = "[a-z_][a-z0-9_]{2,40}$"
-argument-rgx = "[a-z_][a-z0-9_]{2,30}$"
-const-rgx = "(([A-Z_][A-Z0-9_]*)|(__.*__))$"
-module-rgx = "(([a-z_][a-z0-9_]*)|([A-Z][a-zA-Z0-9]+))$"
-inlinevar-rgx = "[A-Za-z_][A-Za-z0-9_]*$"
-function-rgx = "[a-z_][a-z0-9_]{2,40}$"
-class-attribute-rgx = "([A-Za-z_][A-Za-z0-9_]{1,30}|(__.*__))$"
-no-docstring-rgx = "^_"
-docstring-min-length = -1
-
-[tool.pylint.elif]
-max-nested-blocks = 5
-
-[tool.pylint.imports]
-deprecated-modules = "optparse"
-
-[tool.pylint.designs]
-max-args = 5
-ignored-argument-names = "_.*"
-max-locals = 15
-max-returns = 9
-max-branches = 12
-max-statements = 50
-max-parents = 7
-max-attributes = 7
-min-public-methods = 2
-max-public-methods = 20
-max-bool-expr = 5
-
-[tool.pylint.classes]
-defining-attr-methods = "__init__,__new__"
-valid-classmethod-first-arg = "cls"
-valid-metaclass-classmethod-first-arg = "mcs"
-exclude-protected = "_asdict,_fields,_replace,_source,_make"
-
-[tool.pylint.exceptions]
-overgeneral-exceptions = "Exception"
-
-[tool.setuptools.package-data]
-"mc_dagprop.monte_carlo" = ["*.pyi"]
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+skip_covered = true
 
 [tool.setuptools.packages.find]
 include = ["mc_dagprop*"]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"mc_dagprop" = ["py.typed"]
+"mc_dagprop.monte_carlo" = ["*.pyi"]
+
+[tool.setuptools.exclude-package-data]
+"mc_dagprop.monte_carlo" = ["*.cpp", "*.hpp"]

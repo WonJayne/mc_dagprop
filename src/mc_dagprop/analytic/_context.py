@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+from collections import deque
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import IntEnum, unique
+from types import MappingProxyType
+from typing import cast
 
 import numpy as np
 
-from mc_dagprop import Event
-from mc_dagprop.types import ActivityIndex, EventIndex, ProbabilityMass, Second
+from mc_dagprop.monte_carlo import Event
+from mc_dagprop.types import ActivityIndex, EventIndex, ProbabilityMass
 
 from ._pmf import DiscretePMF
 
 PredecessorTuple = tuple[EventIndex, ActivityIndex]
+StochasticSource = tuple[EventIndex, EventIndex]
+_MAX_SIGNED_INDEX = 2**31 - 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +72,26 @@ class OverflowRule(IntEnum):
     REDISTRIBUTE = 3
 
 
+def _require_step(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"step must be an integer number of seconds, got {value!r}")
+    if value <= 0:
+        raise ValueError("step_size must be positive")
+    return value
+
+
+def _require_underflow_rule(value: object) -> UnderflowRule:
+    if not isinstance(value, UnderflowRule):
+        raise TypeError(f"underflow_rule must be an UnderflowRule, got {value!r}")
+    return value
+
+
+def _require_overflow_rule(value: object) -> OverflowRule:
+    if not isinstance(value, OverflowRule):
+        raise TypeError(f"overflow_rule must be an OverflowRule, got {value!r}")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class AnalyticContext:
     """Container describing the analytic propagation network.
@@ -80,11 +106,30 @@ class AnalyticContext:
     """
 
     events: tuple[Event, ...]
-    activities: dict[tuple[EventIndex, EventIndex], tuple[ActivityIndex, AnalyticActivity]]
+    activities: Mapping[tuple[EventIndex, EventIndex], tuple[ActivityIndex, AnalyticActivity]]
     precedence_list: tuple[tuple[EventIndex, tuple[PredecessorTuple, ...]], ...]
-    step: Second
+    step: int
     underflow_rule: UnderflowRule
     overflow_rule: OverflowRule
+
+    def __post_init__(self) -> None:
+        """Snapshot all containers so the validated DAG cannot change later."""
+        object.__setattr__(self, "events", tuple(self.events))
+        object.__setattr__(
+            self,
+            "activities",
+            MappingProxyType(
+                {
+                    (source, target): (activity_index, activity)
+                    for (source, target), (activity_index, activity) in self.activities.items()
+                }
+            ),
+        )
+        object.__setattr__(
+            self,
+            "precedence_list",
+            tuple((target, tuple(predecessors)) for target, predecessors in self.precedence_list),
+        )
 
 
 def validate_context(context: AnalyticContext) -> None:
@@ -95,16 +140,24 @@ def validate_context(context: AnalyticContext) -> None:
     """
 
     n_events = len(context.events)
+    if n_events == 0:
+        raise ValueError("analytic context must contain at least one event")
 
-    if not isinstance(context.step, int):
-        raise TypeError(f"step must be an integer number of seconds, got {context.step!r}")
-    if context.step <= 0:
-        raise ValueError("step_size must be positive")
+    _ = _require_step(context.step)
+    _ = _require_underflow_rule(context.underflow_rule)
+    _ = _require_overflow_rule(context.overflow_rule)
+
+    def require_index(value: object, label: str) -> None:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"{label} must be an integer, got {value!r}")
+        if value > _MAX_SIGNED_INDEX:
+            raise ValueError(f"{label} must not exceed {_MAX_SIGNED_INDEX}")
 
     def require_grid_aligned(value: float, label: str) -> None:
         if not np.isfinite(value):
             raise ValueError(f"{label} must be finite")
-        if not np.isclose(np.mod(value, context.step), 0.0, rtol=0.0, atol=1e-9):
+        remainder = cast(np.float64, np.mod(value, context.step))
+        if not np.isclose(remainder, 0.0, rtol=0.0, atol=1e-9):
             raise ValueError(f"{label}={value!r} is not aligned to analytic step {context.step}")
 
     # Validate scheduled events
@@ -119,46 +172,137 @@ def validate_context(context: AnalyticContext) -> None:
         require_grid_aligned(ts.actual, f"event {i} actual")
 
     # Validate activities and PMFs
+    seen_activity_indices: set[int] = set()
     for (src, dst), (edge_idx, edge) in context.activities.items():
+        require_index(src, "activity source index")
+        require_index(dst, "activity target index")
+        require_index(edge_idx, "activity index")
+        require_index(edge.idx, "analytic activity index")
         if not (0 <= src < n_events and 0 <= dst < n_events):
             raise ValueError(f"activity {(src, dst)} references invalid node")
+        if edge_idx < 0:
+            raise ValueError(f"activity index {edge_idx} must be non-negative")
+        if edge.idx != edge_idx:
+            raise ValueError(f"activity index {edge.idx} for {(src, dst)} does not match context mapping {edge_idx}")
+        if edge_idx in seen_activity_indices:
+            raise ValueError(f"duplicate activity index {edge_idx}")
+        seen_activity_indices.add(edge_idx)
         edge.pmf.validate()
-        if not np.isclose(edge.pmf.step, context.step):
+        if np.any(edge.pmf.values < 0.0):
+            raise ValueError(f"activity {(src, dst)} PMF support must be non-negative")
+        if edge.pmf.step != context.step:
             raise ValueError(f"edge {(src, dst)} step {edge.pmf.step} does not match context step size {context.step}")
         edge.pmf.validate_alignment(context.step)
-        if not np.isclose(edge.pmf.total_mass, 1.0):
+        if not np.isclose(edge.pmf.total_mass, 1.0, rtol=1e-12, atol=1e-15):
             raise ValueError(f"activity {(src, dst)} PMF does not sum to 1, got {edge.pmf.total_mass}")
+    if seen_activity_indices != set(range(len(seen_activity_indices))):
+        raise ValueError("activity indices must be contiguous from 0 to n-1")
 
     # Validate precedence list and build topology for cycle check
-    from collections import deque
-
     adjacency: list[list[int]] = [[] for _ in range(n_events)]
     indegree = [0] * n_events
+    seen_targets: set[int] = set()
+    referenced_activities: set[tuple[int, int]] = set()
 
     for target, preds in context.precedence_list:
+        require_index(target, "precedence target index")
         if not (0 <= target < n_events):
             raise ValueError(f"target index {target} out of range")
+        if target in seen_targets:
+            raise ValueError(f"duplicate precedence entry for target {target}")
+        seen_targets.add(target)
+        seen_predecessor_sources: set[int] = set()
         for src, link in preds:
+            require_index(src, "predecessor source index")
+            require_index(link, "predecessor activity index")
             if not (0 <= src < n_events):
                 raise ValueError(f"predecessor index {src} out of range")
+            if src in seen_predecessor_sources:
+                raise ValueError(f"duplicate predecessor source {src} for target {target}")
+            seen_predecessor_sources.add(src)
             edge = context.activities.get((src, target))
             if edge is None:
                 raise ValueError(f"missing activity for {(src, target)}")
             if edge[0] != link:
                 raise ValueError(f"edge index {link} for {(src, target)} does not match context mapping {edge[0]}")
+            referenced_activities.add((src, target))
             adjacency[src].append(target)
             indegree[target] += 1
 
+    unused_activities = set(context.activities).difference(referenced_activities)
+    if unused_activities:
+        unused_text = ", ".join(str(edge) for edge in sorted(unused_activities))
+        raise ValueError(f"activities missing from precedence list: {unused_text}")
+
     # Topological check for cycles
     q: deque[int] = deque(i for i, deg in enumerate(indegree) if deg == 0)
-    visited = 0
+    topological_order: list[int] = []
     while q:
         node = q.popleft()
-        visited += 1
+        topological_order.append(node)
         for dst in adjacency[node]:
             indegree[dst] -= 1
             if indegree[dst] == 0:
                 q.append(dst)
 
-    if visited != n_events:
+    if len(topological_order) != n_events:
         raise ValueError("precedence list contains a cycle")
+
+    _validate_exact_equivalence_domain(context, topological_order)
+
+
+def _is_stochastic(pmf: DiscretePMF) -> bool:
+    """Return whether ``pmf`` contains more than one possible value."""
+    return bool(np.count_nonzero(pmf.probabilities > 0.0) > 1)
+
+
+def _validate_exact_equivalence_domain(context: AnalyticContext, topological_order: Iterable[int]) -> None:
+    """Reject merges that combine dependent stochastic marginal distributions."""
+    predecessors_by_target = dict(context.precedence_list)
+    stochastic_ancestry: list[frozenset[StochasticSource]] = [frozenset() for _ in context.events]
+
+    for target_index in topological_order:
+        target = int(target_index)
+        accumulated_sources: set[StochasticSource] = set()
+        for source, _ in predecessors_by_target.get(target, ()):
+            branch_sources = set(stochastic_ancestry[source])
+            activity = context.activities[(source, target)][1]
+            if _is_stochastic(activity.pmf):
+                branch_sources.add((source, target))
+            shared_sources = accumulated_sources.intersection(branch_sources)
+            if shared_sources:
+                shared_text = ", ".join(f"{src}->{dst}" for src, dst in sorted(shared_sources))
+                raise ValueError(
+                    f"analytic exactness requires disjoint stochastic ancestry at merge {target}; "
+                    f"shared stochastic activities: {shared_text}"
+                )
+            accumulated_sources.update(branch_sources)
+        stochastic_ancestry[target] = frozenset(accumulated_sources)
+
+
+def validate_exact_equivalence_domain(context: AnalyticContext) -> None:
+    """Validate the stochastic-independence domain required for exact propagation.
+
+    ``validate_context`` performs this check automatically. This standalone
+    helper is exposed for callers that need to state or inspect the exactness
+    contract explicitly after structural validation.
+    """
+    event_count = len(context.events)
+    adjacency: list[list[int]] = [[] for _ in range(event_count)]
+    indegree = [0] * event_count
+    for target, predecessors in context.precedence_list:
+        indegree[target] += len(predecessors)
+        for source, _ in predecessors:
+            adjacency[source].append(target)
+    queue: deque[int] = deque(index for index, degree in enumerate(indegree) if degree == 0)
+    topological_order: list[int] = []
+    while queue:
+        source = queue.popleft()
+        topological_order.append(source)
+        for target in adjacency[source]:
+            indegree[target] -= 1
+            if indegree[target] == 0:
+                queue.append(target)
+    if len(topological_order) != event_count:
+        raise ValueError("precedence list contains a cycle")
+    _validate_exact_equivalence_domain(context, topological_order)

@@ -1,5 +1,4 @@
 from demo._shared import ExampleConfig, build_example_context
-
 from mc_dagprop import create_analytic_propagator
 
 
@@ -10,7 +9,7 @@ def main() -> None:
     sim = create_analytic_propagator(ctx)
     results = sim.run()
 
-    for scheduled, result in zip(ctx.events, results):
+    for scheduled, result in zip(ctx.events, results, strict=True):
         print(f"{scheduled.event_id}:")
         print(f"  values: {result.pmf.values}")
         print(f"  probs:  {result.pmf.probabilities}")

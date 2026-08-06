@@ -8,7 +8,14 @@ import numpy as np
 import pytest
 
 import mc_dagprop as mc
-from mc_dagprop.analytic import AnalyticActivity, AnalyticContext, DiscretePMF, OverflowRule, UnderflowRule, create_analytic_propagator
+from mc_dagprop.analytic import (
+    AnalyticActivity,
+    AnalyticContext,
+    DiscretePMF,
+    OverflowRule,
+    UnderflowRule,
+    create_analytic_propagator,
+)
 from mc_dagprop.analytic.distributions import constant_pmf
 
 
@@ -65,7 +72,9 @@ def test_zero_duration_relative_family_is_deterministic_zero() -> None:
     context = mc.PropagationContext(events, {(0, 1): mc.Activity(0, 0, 1)}, ((1, ((0, 0),)),))
     registry = mc.DelayFamilyRegistry()
     registry.add_exponential(1, scale=1.0, max_scale=3.0)
-    analytic = mc.AnalyticPropagator.from_context(context, registry, step=1, underflow_rule=mc.UnderflowRule.TRUNCATE, overflow_rule=mc.OverflowRule.TRUNCATE)
+    analytic = mc.AnalyticPropagator.from_context(
+        context, registry, step=1, underflow_rule=mc.UnderflowRule.TRUNCATE, overflow_rule=mc.OverflowRule.TRUNCATE
+    )
     assert analytic.context.activities[(0, 1)][1].pmf.values.tolist() == [0.0]
     result = analytic.run()
     assert result[1].pmf.values.tolist() == [0.0]
@@ -97,10 +106,18 @@ def test_openbus_fixed_precedence_resource_activity_hand_computed() -> None:
     )
     # Inject A_release's uncertainty by shifting root event 0 after propagation primitive.
     merged = release_delay.shift(120).maximum(DiscretePMF.delta(180, 60))
-    positive = {value: probability for value, probability in zip(merged.values.tolist(), merged.probabilities.tolist()) if probability > 0}
+    positive = {
+        value: probability
+        for value, probability in zip(merged.values.tolist(), merged.probabilities.tolist(), strict=True)
+        if probability > 0
+    }
     assert positive == pytest.approx({180.0: 1.0})
     propagated = create_analytic_propagator(context).run()[2].pmf
-    propagated_positive = {value: probability for value, probability in zip(propagated.values.tolist(), propagated.probabilities.tolist()) if probability > 0}
+    propagated_positive = {
+        value: probability
+        for value, probability in zip(propagated.values.tolist(), propagated.probabilities.tolist(), strict=True)
+        if probability > 0
+    }
     assert propagated_positive == pytest.approx({180.0: 1.0})
 
 
