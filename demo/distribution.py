@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 import plotly.graph_objects as go
 
 from mc_dagprop import Activity, DagContext, Event, EventTimestamp, GenericDelayGenerator, Simulator
-from mc_dagprop.types import ActivityIndex, ActivityType, Second
+from mc_dagprop.types import Second
 
 
 def simulate_and_collect(
@@ -15,19 +15,17 @@ def simulate_and_collect(
     """Run a Monte Carlo simulation and return realized times."""
 
     events = [Event("A", EventTimestamp(0.0, 0.0, 0.0)), Event("B", EventTimestamp(0.0, 0.0, 0.0))]
-    activities = {(0, 1): Activity(idx=ActivityIndex(0), minimal_duration=base_duration, activity_type=ActivityType(1))}
+    activities = {(0, 1): Activity(idx=0, minimal_duration=base_duration, activity_type=1)}
     precedence = [(1, [(0, 0)])]
     ctx = DagContext(events, activities, precedence)
 
     gen = GenericDelayGenerator()
     if dist_name == "constant":
-        gen.add_constant(ActivityType(1), factor=params["factor"])
+        gen.add_constant(1, factor=params["factor"])
     elif dist_name == "exponential":
-        gen.add_exponential(ActivityType(1), scale=params["scale"], max_scale=params["max_scale"])
+        gen.add_exponential(1, scale=params["scale"], max_scale=params["max_scale"])
     elif dist_name == "gamma":
-        gen.add_gamma(
-            ActivityType(1), shape=params["shape"], scale=params["scale"], max_scale=params.get("max_scale", 1e6)
-        )
+        gen.add_gamma(1, shape=params["shape"], scale=params["scale"], max_scale=params.get("max_scale", 1e6))
     else:
         raise ValueError(dist_name)
 
@@ -39,6 +37,7 @@ def simulate_and_collect(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compare different delay distributions")
     parser.add_argument("--trials", type=int, default=10000, help="number of Monte-Carlo runs per parameter set")
+    parser.add_argument("--no-show", action="store_true", help="build the figure without opening a browser window")
     args = parser.parse_args()
 
     seeds = tuple(range(args.trials))
@@ -72,7 +71,8 @@ def main() -> None:
         yaxis_title="Count",
         barmode="overlay",
     )
-    fig.show()
+    if not args.no_show:
+        fig.show()
 
 
 if __name__ == "__main__":

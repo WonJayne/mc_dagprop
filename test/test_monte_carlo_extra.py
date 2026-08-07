@@ -35,7 +35,7 @@ class TestDelayDistributions(BaseContextMixin, unittest.TestCase):
 
     def test_exponential_distribution(self) -> None:
         gen = GenericDelayGenerator()
-        gen.add_exponential(activity_type=1, lambda_=2.0, max_scale=0.5)
+        gen.add_exponential(activity_type=1, scale=2.0, max_scale=0.5)
         sim = Simulator(self.context, gen)
         res = sim.run(seed=0)
         self.assertGreaterEqual(res.durations[0], 1.0)
@@ -71,19 +71,16 @@ class TestErrorConditions(BaseContextMixin, unittest.TestCase):
             Simulator(context, gen)
 
     def test_reserved_activity_type(self) -> None:
-        context = self.create_context()
         gen = GenericDelayGenerator()
-        gen.add_constant(-1, 0.0)
-        with self.assertRaises(RuntimeError):
-            Simulator(context, gen)
-
+        with self.assertRaises(ValueError):
+            gen.add_constant(-1, 0.0)
 
 
 class TestRunMany(BaseContextMixin, unittest.TestCase):
     def setUp(self) -> None:
         self.context = self.create_context()
         gen = GenericDelayGenerator()
-        gen.add_exponential(activity_type=1, lambda_=1.0, max_scale=0.5)
+        gen.add_exponential(activity_type=1, scale=1.0, max_scale=0.5)
         self.sim = Simulator(self.context, gen)
 
     def test_run_many_matches_individual_runs(self) -> None:
@@ -91,7 +88,7 @@ class TestRunMany(BaseContextMixin, unittest.TestCase):
         batch = self.sim.run_many(seeds)
         solo = [self.sim.run(seed) for seed in seeds]
         self.assertEqual(len(batch), len(solo))
-        for b, s in zip(batch, solo):
+        for b, s in zip(batch, solo, strict=True):
             np.testing.assert_allclose(b.realized, s.realized)
             np.testing.assert_allclose(b.durations, s.durations)
             np.testing.assert_array_equal(b.cause_event, s.cause_event)

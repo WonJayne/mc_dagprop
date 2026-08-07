@@ -1,25 +1,50 @@
 # Release Notes
 
-## Unreleased
+## 1.0.0rc1
 
-### Build and CI
+This release candidate freezes the first supported public semantics and is
+intentionally allowed to break pre-1.0 behaviour.
 
-- Added explicit platform-aware native extension flags in `setup.py` so the C++ core builds cleanly across Windows, macOS, and Linux.
-- Added a GitHub Actions workflow (`.github/workflows/build-wheels.yml`) to build wheel artifacts for Windows, macOS (x86_64 + arm64), and Linux using `cibuildwheel`, plus an sdist build job.
-- Hardened the wheel workflow for macOS/Windows by upgrading core build tooling before wheel creation and switching cibuildwheel to the `build` frontend.
-- Pinned build-backend tooling to `setuptools<77` in `pyproject.toml` to avoid the `packaging.licenses` import requirement introduced by newer setuptools in isolated wheel builds.
-- Normalized `project.license` to PEP 621 table form (`{ text = "MIT" }`) for compatibility with the pinned setuptools build backend range.
-- Fixed `ApproxNormalDistribution::reset()` in `_custom_rng.hpp` to avoid references to non-existent cached-normal members, resolving clang/macOS wheel compile failures.
-- Updated `_core.cpp` constructor moves to use explicit `std::move` to satisfy stricter clang diagnostics in macOS wheel builds.
+- Defines timestamp roles, analytic bound policies, delay units, non-negative
+  activity types, unsigned 64-bit seeds, overflow errors, and propagator thread
+  safety in `docs/semantics.md`.
+- Defines two qualified parity domains: exact grid-aligned discrete propagation
+  and statistical parity for floor-quantized continuous delays.
+- Rejects duplicate predecessors and stochastic shared-ancestry reconvergence
+  instead of silently treating correlated branches as independent.
+- Replaces unbounded exponential and gamma rejection loops with terminating
+  truncated samplers and improves distribution-tail numerics.
+- Makes Monte Carlo runs reentrant by giving each run independent RNG,
+  distribution, and scratch state.
+- Enforces common context and delay-family validation before either backend is
+  constructed, equal PMF grid steps, and finite arithmetic throughout.
+- Adds randomized exhaustive-enumerator parity, quantized-continuous parity,
+  malformed-input symmetry, concurrency, sanitizer, executable documentation,
+  and installed wheel/source-distribution tests.
+- Aligns local formatting, linting, typing, and testing with OpenBus through
+  Black, Ruff, BasedPyright, and pytest; restores the `py.typed` marker only
+  with a passing public consumer type check.
+- Tests CPython 3.12--3.14 wheels and source distributions outside the checkout
+  on the documented Linux, Windows, and macOS architectures.
+- Includes the vendored C++ header and its third-party MIT notice in source and
+  binary distributions, and rejects release tags that do not match the package
+  version.
 
-### Documentation
+## 0.10.0
 
-- Documented the cross-platform wheel build workflow and local source-build command in the README.
-
-### Documentation
-
-- Synchronized the README with the current public API: analytic examples now use `AnalyticActivity`, explicit flow rules, and the `step` field name from `AnalyticContext`.
-- Updated package-structure notes to reflect the current modules (`demo/` examples) and removed references to non-existent utilities.
+- Clarified P0 fixed-precedence semantics for OpenBus-derived event-activity DAGs.
+- Kept `max_delay` removed from the functional API.
+- Documented analytic `latest` as a hard bound and Monte Carlo `latest` as metadata only.
+- Added shared `PropagationContext` and `DelayFamilyRegistry` release semantics.
+- Clarified extra-delay families: base/minimal duration is deterministic, registered families add stochastic extra delay, and unregistered activity types are deterministic zero-extra-delay.
+- Rejected duplicate delay-family registrations.
+- Fixed PMF validation and `REMOVE` clipping so sub-probability mass propagates through chains.
+- Added strict analytic grid-alignment validation.
+- Hardened C++/pybind Monte Carlo validation for malformed indices, references, distributions, and parameters.
+- Added OpenBus fixed-precedence integration documentation.
+- Fixed the optional `[plot]` extra metadata.
+- Added installed-wheel smoke testing to the release pipeline.
+- Removed the shipped `py.typed` marker until static typing/stubs are release-clean.
 
 ## 0.9.0
 
@@ -32,4 +57,3 @@
 - Added event-bound overflow handling for analytic propagation.
 - Improved test ergonomics so `pytest` works without explicitly setting
   `PYTHONPATH`.
-

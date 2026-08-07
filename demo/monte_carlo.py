@@ -4,10 +4,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
-from demo._shared import ExampleConfig, build_example_context
 
+from demo._shared import ExampleConfig, build_example_context
 from mc_dagprop import Activity, DagContext, Event, GenericDelayGenerator, Simulator
-from mc_dagprop.types import ActivityType, EventIndex, Second
+from mc_dagprop.types import EventIndex
 
 
 @dataclass(frozen=True)
@@ -28,15 +28,11 @@ def build_mc_simulator(context_cfg: ExampleConfig) -> Simulator:
 
     for (src, dst), (_, edge) in analytic_ctx.activities.items():
         edge_idx = edge.idx
-        activities[(src, dst)] = Activity(
-            idx=edge_idx, minimal_duration=Second(0.0), activity_type=ActivityType(edge_idx)
-        )
+        activities[(src, dst)] = Activity(idx=edge_idx, minimal_duration=0.0, activity_type=int(edge_idx))
         pmf = edge.pmf
-        generator.add_empirical_absolute(ActivityType(edge_idx), pmf.values.tolist(), pmf.probabilities.tolist())
+        generator.add_empirical_absolute(int(edge_idx), pmf.values.tolist(), pmf.probabilities.tolist())
 
-    mc_ctx = DagContext(
-        events=events, activities=activities, precedence_list=analytic_ctx.precedence_list
-    )
+    mc_ctx = DagContext(events=events, activities=activities, precedence_list=analytic_ctx.precedence_list)
 
     return Simulator(mc_ctx, generator)
 

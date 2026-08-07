@@ -1,5 +1,9 @@
 include README.md
+include RELEASE_NOTES.md
 include LICENSE
-recursive-include src/mc_dagprop/monte_carlo *.hpp *.cpp *.pyi
-recursive-include src/mc_dagprop *.typed
-recursive-include test *.py
+include THIRD_PARTY_NOTICES.md
+recursive-include docs *
+recursive-include demo *.py
+recursive-include scripts *.py
+recursive-include src/mc_dagprop *.cpp *.hpp *.py *.pyi py.typed
+global-exclude __pycache__/* *.py[cod]

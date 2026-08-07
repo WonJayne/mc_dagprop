@@ -1,16 +1,56 @@
 from __future__ import annotations
 
-from collections import deque
-from dataclasses import dataclass
 import logging
+from collections import deque
+from collections.abc import Mapping
+from dataclasses import dataclass
+from importlib import import_module
+from typing import Protocol, cast
 
 import numpy as np
+import numpy.typing as npt
 
-from mc_dagprop.types import ActivityIndex, EventIndex, ProbabilityMass, Second
+from mc_dagprop.monte_carlo import Activity, Event
+from mc_dagprop.types import ActivityIndex, EventIndex, Second
 
-from . import OverflowRule, UnderflowRule
-from ._context import AnalyticContext, PredecessorTuple, SimulatedEvent, validate_context
+from ._context import AnalyticContext, OverflowRule, PredecessorTuple, SimulatedEvent, UnderflowRule, validate_context
 from ._pmf import DiscretePMF
+
+
+class PropagationContextLike(Protocol):
+    """Structural shared-context interface consumed by the analytic frontend."""
+
+    @property
+    def events(self) -> tuple[Event, ...]: ...
+
+    @property
+    def activities(self) -> Mapping[tuple[int, int], Activity]: ...
+
+    @property
+    def precedence_list(self) -> tuple[tuple[int, tuple[tuple[int, int], ...]], ...]: ...
+
+
+class DelayFamilyRegistryLike(Protocol):
+    """Structural delay-registry interface consumed by the analytic frontend."""
+
+    def increment_pmf(self, activity: Activity, step: int) -> DiscretePMF: ...
+
+
+class _AnalyticFactory(Protocol):
+    def __call__(
+        self,
+        context: PropagationContextLike,
+        registry: DelayFamilyRegistryLike,
+        *,
+        step: int,
+        overflow_rule: OverflowRule,
+        underflow_rule: UnderflowRule,
+    ) -> AnalyticPropagator: ...
+
+
+class _FrontendModule(Protocol):
+    analytic_from_context: _AnalyticFactory
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,7 +61,7 @@ def _build_topology(
     """Return predecessor mapping and topological order for ``context``."""
 
     event_count = len(context.events)
-    adjacency: list[list[int]] = [[] for _ in range(event_count)]
+    adjacency: list[list[EventIndex]] = [[] for _ in range(event_count)]
     indegree = [0] * event_count
     preds_by_target: list[tuple[PredecessorTuple, ...] | None] = [None] * event_count
 
@@ -31,8 +71,8 @@ def _build_topology(
         for src, _ in preds:
             adjacency[src].append(target)
 
-    order: list[int] = []
-    q: deque[int] = deque(i for i, deg in enumerate(indegree) if deg == 0)
+    order: list[EventIndex] = []
+    q: deque[EventIndex] = deque(int(i) for i, deg in enumerate(indegree) if deg == 0)
 
     while q:
         node = q.popleft()
@@ -48,7 +88,7 @@ def _build_topology(
     return tuple(preds_by_target), tuple(order)
 
 
-def create_analytic_propagator(context: AnalyticContext, validate: bool = True) -> "AnalyticPropagator":
+def create_analytic_propagator(context: AnalyticContext, validate: bool = True) -> AnalyticPropagator:
     """Return an :class:`AnalyticPropagator` with topology built for ``context``.
 
     Parameters
@@ -81,6 +121,24 @@ class AnalyticPropagator:
     _predecessors_by_target: tuple[tuple[PredecessorTuple, ...] | None, ...]
     _topological_node_order: tuple[EventIndex, ...]
 
+    @classmethod
+    def from_context(
+        cls,
+        context: PropagationContextLike,
+        registry: DelayFamilyRegistryLike,
+        *,
+        step: int,
+        overflow_rule: OverflowRule,
+        underflow_rule: UnderflowRule,
+    ) -> AnalyticPropagator:
+        """Create an analytic propagator from the shared logical frontend."""
+        frontend = cast(_FrontendModule, cast(object, import_module("mc_dagprop.frontend")))
+        factory: _AnalyticFactory = frontend.analytic_from_context
+        propagator = factory(context, registry, step=step, overflow_rule=overflow_rule, underflow_rule=underflow_rule)
+        if not isinstance(propagator, cls):
+            raise TypeError("analytic frontend returned an incompatible propagator")
+        return propagator
+
     @property
     def underflow_rule(self) -> UnderflowRule:
         return self.context.underflow_rule
@@ -103,18 +161,19 @@ class AnalyticPropagator:
         for this_node in self._topological_node_order:
             ev = self.context.events[this_node]
             predecessors = self._predecessors_by_target[this_node]
-            is_origin = predecessors is None or len(predecessors) == 0
-            if is_origin:
-                base = DiscretePMF.delta(
-                    round(ev.timestamp.earliest / self.context.step) * self.context.step, self.context.step
-                )
-                assert np.isclose(base.total_mass, 1.0)
-                events[this_node] = SimulatedEvent(base, ProbabilityMass(0.0), ProbabilityMass(0.0))
+            if not predecessors:
+                base = DiscretePMF.delta(ev.timestamp.earliest, self.context.step)
+                if not np.isclose(base.total_mass, 1.0):
+                    raise RuntimeError("root PMF construction did not produce unit mass")
+                events[this_node] = SimulatedEvent(base, 0.0, 0.0)
                 continue
 
             to_combine = []
             for src, _ in predecessors:
-                pred = events[src].pmf
+                predecessor_event = events[src]
+                if predecessor_event is None:
+                    raise RuntimeError(f"predecessor event {src} was not processed before event {this_node}")
+                pred = predecessor_event.pmf
                 act = self.context.activities[(src, this_node)][1].pmf
                 conv = pred.convolve(act)
 
@@ -141,29 +200,30 @@ class AnalyticPropagator:
                     _LOGGER.debug("maximum mass drift: node=%s inputs=%s after=%s", this_node, before, after)
 
             lower_bound, upper_bound = self._event_bounds(ev.timestamp.earliest, ev.timestamp.latest)
-            events[this_node] = self._convert_to_simulated_event(resulting_pmf, lower_bound, upper_bound)
+            simulated_event = self._convert_to_simulated_event(resulting_pmf, lower_bound, upper_bound)
+            events[this_node] = simulated_event
 
-            # Sanity: _convert shouldn't change mass when under/overflow=0
-            assert np.isclose(
-                events[this_node].pmf.total_mass + events[this_node].underflow + events[this_node].overflow,
-                resulting_pmf.total_mass,
-                rtol=1e-12,
-                atol=1e-15,
-            )
+            accounted_mass = simulated_event.pmf.total_mass + simulated_event.underflow + simulated_event.overflow
+            if not np.isclose(accounted_mass, resulting_pmf.total_mass, rtol=1e-12, atol=1e-15):
+                raise RuntimeError(
+                    f"mass mismatch after clipping for event {this_node}: "
+                    f"accounted={accounted_mass}, incoming={resulting_pmf.total_mass}"
+                )
 
-        assert all(events[i] is not None for i in range(n_events)), "Not all events were processed, check context"
-        return tuple(events[i] for i in range(n_events))
+        if not all(events[i] is not None for i in range(n_events)):
+            raise RuntimeError("Not all events were processed, check context")
+        return tuple(event for event in events if event is not None)
 
     def _event_bounds(self, earliest: Second, latest: Second) -> tuple[int, int]:
         """Return rounded event bounds from the scheduled event window."""
 
-        return int(np.round(earliest)), int(np.round(latest))
+        return round(earliest), round(latest)
 
     def _convert_to_simulated_event(self, pmf: DiscretePMF, min_value: int, max_value: int) -> SimulatedEvent:
         """Clip pmf to [min_value, max_value] and mass-correct depending on flow rules.
 
         Invariant enforced (up to numerical tolerance):
-            clipped.pmf.total_mass + under_mass + over_mass == 1.0
+            clipped.pmf.total_mass + under_mass + over_mass == incoming mass.
         """
         if min_value > max_value:
             raise ValueError("min_value must not exceed max_value")
@@ -178,94 +238,93 @@ class AnalyticPropagator:
         over_mask = vals > max_value
         keep_mask = ~(under_mask | over_mask)
 
-        under_mass = ProbabilityMass(probs[under_mask].sum())
-        over_mass = ProbabilityMass(probs[over_mask].sum())
+        under_mass = float(cast(np.float64, probs[under_mask].sum()))
+        over_mass = float(cast(np.float64, probs[over_mask].sum()))
 
         new_vals = vals[keep_mask]
         new_probs = probs[keep_mask].copy()
 
         # ---- Handle UNDERFLOW rule
-        to_redistribute_under = ProbabilityMass(0.0)
+        to_redistribute_under = 0.0
         if self.underflow_rule == UnderflowRule.TRUNCATE and under_mass > 0.0:
             # push underflow onto the lower bound bin
-            if new_vals.size and np.isclose(new_vals[0], min_value):
+            if new_vals.size and np.isclose(cast(np.float64, new_vals[0]), min_value, rtol=0.0, atol=1.0e-9):
                 new_probs[0] += under_mass
             elif new_vals.size == 0:
-                new_vals = np.array([min_value], dtype=float)
-                new_probs = np.array([under_mass], dtype=float)
+                new_vals = np.array([min_value], dtype=np.float64)
+                new_probs = np.array([under_mass], dtype=np.float64)
             else:
                 new_vals = np.insert(new_vals, 0, float(min_value))
                 new_probs = np.insert(new_probs, 0, float(under_mass))
-            under_mass = ProbabilityMass(0.0)
+            under_mass = 0.0
         elif self.underflow_rule == UnderflowRule.REDISTRIBUTE and under_mass > 0.0:
             # keep record of mass but reinsert later proportionally
             to_redistribute_under = under_mass
-            under_mass = ProbabilityMass(0.0)
+            under_mass = 0.0
 
         # ---- Handle OVERFLOW rule
-        to_redistribute_over = ProbabilityMass(0.0)
+        to_redistribute_over = 0.0
         if self.overflow_rule == OverflowRule.TRUNCATE and over_mass > 0.0:
             # push overflow onto the upper bound bin
-            if new_vals.size and np.isclose(new_vals[-1], max_value):
+            if new_vals.size and np.isclose(cast(np.float64, new_vals[-1]), max_value, rtol=0.0, atol=1.0e-9):
                 new_probs[-1] += over_mass
             elif new_vals.size == 0:
-                new_vals = np.array([max_value], dtype=float)
-                new_probs = np.array([over_mass], dtype=float)
+                new_vals = np.array([max_value], dtype=np.float64)
+                new_probs = np.array([over_mass], dtype=np.float64)
             else:
-                new_vals = np.append(new_vals, float(max_value))
-                new_probs = np.append(new_probs, float(over_mass))
-            over_mass = ProbabilityMass(0.0)
+                new_vals = cast(npt.NDArray[np.float64], np.append(new_vals, float(max_value)))
+                new_probs = cast(npt.NDArray[np.float64], np.append(new_probs, float(over_mass)))
+            over_mass = 0.0
         elif self.overflow_rule == OverflowRule.REDISTRIBUTE and over_mass > 0.0:
             to_redistribute_over = over_mass
-            over_mass = ProbabilityMass(0.0)
+            over_mass = 0.0
 
         # ---- Proportional redistribution (if enabled)
         to_redistribute = to_redistribute_under + to_redistribute_over
-        base_inside = new_probs.sum()
+        base_inside = float(cast(np.float64, new_probs.sum()))
         if to_redistribute > 0.0:
             if base_inside == 0.0:
-                # No inside mass exists, so place redistributed mass on the lower bound.
-                anchor = min_value if np.isfinite(min_value) else max_value
-                new_vals = np.array([anchor], dtype=float)
-                new_probs = np.array([to_redistribute], dtype=float)
+                # Preserve the side from which each redistributed mass originated.
+                anchor_masses: dict[int, float] = {}
+                if to_redistribute_under > 0.0:
+                    anchor_masses[min_value] = to_redistribute_under
+                if to_redistribute_over > 0.0:
+                    anchor_masses[max_value] = anchor_masses.get(max_value, 0.0) + to_redistribute_over
+                new_vals = np.array(tuple(anchor_masses), dtype=np.float64)
+                new_probs = np.array(tuple(anchor_masses.values()), dtype=np.float64)
             else:
                 # proportional to current inside mass
                 new_probs = new_probs + to_redistribute * (new_probs / base_inside)
 
-        # ---- Final mass correction: normalize → scale to target_inside
         if new_vals.size == 0:
-            raise ValueError(
-                f"PMF must not be empty after clipping, {under_mass=}, {over_mass=}, total_in={pmf.probabilities.sum()}"
+            # REMOVE may legitimately eliminate all probability mass. Keep
+            # zero-probability bound anchors so the sub-PMF remains composable.
+            anchors: list[int] = []
+            if under_mass > 0.0:
+                anchors.append(min_value)
+            if over_mass > 0.0 and max_value not in anchors:
+                anchors.append(max_value)
+            if not anchors:
+                anchors.append(min_value)
+            new_vals = np.array(anchors, dtype=np.float64)
+            new_probs = np.zeros(len(anchors), dtype=np.float64)
+
+        incoming_mass = float(pmf.total_mass)
+        accounted_mass = float(cast(np.float64, new_probs.sum())) + under_mass + over_mass
+        if not np.isclose(accounted_mass, incoming_mass, rtol=1e-12, atol=1e-15):
+            raise RuntimeError(
+                f"clipping mass mismatch: accounted={accounted_mass}, incoming={incoming_mass}, "
+                f"underflow={under_mass}, overflow={over_mass}"
             )
-
-        # target inside mass = 1 - (currently accounted under/over)
-        lost = under_mass + over_mass
-        target_inside = max(0.0, 1.0 - lost)  # guard tiny negative from roundoff
-
-        inside_sum = new_probs.sum()
-        if inside_sum > 0.0:
-            # Step 1: normalize inside to exactly 1.0 (eliminate drift)
-            new_probs /= inside_sum
-            # Step 2: scale to the desired inside mass
-            new_probs *= target_inside
-        else:
-            # No inside support; ensure that we are consistent with target mass
-            # If target_inside > 0, create a delta at nearest feasible bound
-            if target_inside > 0.0:
-                anchor = np.clip(min_value, min_value, max_value)  # use min bound
-                new_vals = np.array([anchor], dtype=float)
-                new_probs = np.array([target_inside], dtype=float)
-
-        clipped = DiscretePMF(new_vals, new_probs, step=pmf.step, allow_subprobability=(target_inside < 1.0))
-
-        # Invariant sanity-check (tolerant)
+        retained_mass = float(cast(np.float64, new_probs.sum()))
+        clipped = DiscretePMF(
+            new_vals,
+            new_probs,
+            step=pmf.step,
+            allow_subprobability=not np.isclose(retained_mass, 1.0, rtol=1e-12, atol=1e-15),
+        )
         total = clipped.total_mass + under_mass + over_mass
-        if not np.isclose(total, 1.0, rtol=1e-12, atol=1e-15):
-            # Tighten by a last tiny rescale if we’re microscopically off due to casts
-            corr = 1.0 / total if total > 0 else 1.0
-            new_probs *= corr
-            clipped = DiscretePMF(new_vals, new_probs, step=pmf.step, allow_subprobability=(target_inside < 1.0))
-            total = clipped.total_mass + under_mass + over_mass
-            assert np.isclose(total, 1.0, rtol=1e-12, atol=1e-15), f"Mass mismatch after correction: {total=}"
+        if not np.isclose(total, incoming_mass, rtol=1e-12, atol=1e-15):
+            raise RuntimeError(f"Mass mismatch after clipping: total={total}, incoming={incoming_mass}")
 
         return SimulatedEvent(clipped, under_mass, over_mass)

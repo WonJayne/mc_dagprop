@@ -18,20 +18,14 @@ from mc_dagprop import (
 from mc_dagprop.analytic import OverflowRule, UnderflowRule
 from mc_dagprop.analytic._context import AnalyticActivity, SimulatedEvent
 
-TEST_ACTIVITY_VALUES = np.array([-2.0, -1.0, 0.0, 1.0, 2.0, 3.0])
+TEST_ACTIVITY_VALUES = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
 TEST_ACTIVITY_PROBABILITIES = np.array([0.10, 0.15, 0.20, 0.25, 0.10, 0.20])
 EXPECTED_INSIDE_VALUES = np.array([0.0, 1.0, 2.0])
 
 
 def _run_rule_case(underflow_rule: UnderflowRule, overflow_rule: OverflowRule) -> SimulatedEvent:
-    events = (
-        Event("source", EventTimestamp(0.0, 0.0, 0.0)),
-        Event("bounded_target", EventTimestamp(0.0, 2.0, 0.0)),
-    )
-    analytic_activity = AnalyticActivity(
-        0,
-        DiscretePMF(TEST_ACTIVITY_VALUES, TEST_ACTIVITY_PROBABILITIES, step=1),
-    )
+    events = (Event("source", EventTimestamp(-2.0, -2.0, -2.0)), Event("bounded_target", EventTimestamp(0.0, 2.0, 0.0)))
+    analytic_activity = AnalyticActivity(0, DiscretePMF(TEST_ACTIVITY_VALUES, TEST_ACTIVITY_PROBABILITIES, step=1))
     context = AnalyticContext(
         events=events,
         activities={(0, 1): (0, analytic_activity)},
@@ -129,8 +123,6 @@ class TestDiscreteSimulator(unittest.TestCase):
         with self.assertRaises(ValueError):
             create_analytic_propagator(ctx)
 
-
-
     def test_skip_validation(self) -> None:
         act0 = AnalyticActivity(0, DiscretePMF(np.array([1.0, 2.0]), np.array([0.5, 0.5]), step=1))
         ctx = AnalyticContext(
@@ -179,10 +171,8 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertAlmostEqual(events_res[2].pmf.probabilities.sum(), 1.0, places=6)
 
     def test_rule_combinations(self) -> None:
-        events = (Event("0", EventTimestamp(0.0, 10.0, 0.0)), Event("1", EventTimestamp(0.0, 1.0, 0.0)))
-        edge = AnalyticActivity(
-            0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1)
-        )
+        events = (Event("0", EventTimestamp(-1.0, 10.0, -1.0)), Event("1", EventTimestamp(0.0, 1.0, 0.0)))
+        edge = AnalyticActivity(0, DiscretePMF(np.array([0.0, 1.0, 2.0, 3.0]), np.array([0.5, 0.0, 0.0, 0.5]), step=1))
         ctx = AnalyticContext(
             events=events,
             activities={(0, 1): (0, edge)},
@@ -223,17 +213,17 @@ class TestDiscreteSimulator(unittest.TestCase):
         self.assertTrue(np.allclose(res_mixed2.pmf.values, [0.0, 1.0]))
 
     def test_large_uniform_network(self) -> None:
-        values = np.arange(-180.0, 1800.1, 1.0)
+        values = np.arange(0.0, 1980.1, 1.0)
         probs = np.ones_like(values, dtype=float) / len(values)
-        events = tuple(Event(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(5))
-        precedence = ((1, ((0, 0),)), (2, ((0, 1),)), (3, ((1, 2), (2, 3))), (4, ((2, 4), (3, 5))))
+        events = tuple(Event(str(i), EventTimestamp(0.0, 2000.0, 0.0)) for i in range(6))
+        precedence = ((1, ((0, 0),)), (2, ((0, 1),)), (3, ((1, 2), (2, 3))), (4, ((3, 4), (5, 5))))
         activities = {
             (0, 1): (0, AnalyticActivity(0, DiscretePMF(values, probs, step=1))),
             (0, 2): (1, AnalyticActivity(1, DiscretePMF(values, probs, step=1))),
             (1, 3): (2, AnalyticActivity(2, DiscretePMF(values, probs, step=1))),
             (2, 3): (3, AnalyticActivity(3, DiscretePMF(values, probs, step=1))),
-            (2, 4): (4, AnalyticActivity(4, DiscretePMF(values, probs, step=1))),
-            (3, 4): (5, AnalyticActivity(5, DiscretePMF(values, probs, step=1))),
+            (3, 4): (4, AnalyticActivity(4, DiscretePMF(values, probs, step=1))),
+            (5, 4): (5, AnalyticActivity(5, DiscretePMF(values, probs, step=1))),
         }
         ctx = AnalyticContext(
             events=events,
@@ -245,7 +235,7 @@ class TestDiscreteSimulator(unittest.TestCase):
         )
         ds = create_analytic_propagator(ctx)
         events_res = ds.run()
-        self.assertEqual(len(events_res), 5)
+        self.assertEqual(len(events_res), 6)
         for e in events_res[1:]:
             self.assertAlmostEqual(e.pmf.step, 1.0, places=6)
         self.assertTrue(all(e.underflow >= 0.0 for e in events_res))
@@ -280,10 +270,8 @@ class TestDiscreteSimulator(unittest.TestCase):
 
 
 def test_run_returns_simulated_event_objects() -> None:
-    events = (Event("0", EventTimestamp(0.0, 10.0, 0.0)), Event("1", EventTimestamp(0.0, 10.0, 0.0)))
-    edge = AnalyticActivity(
-        0, DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1)
-    )
+    events = (Event("0", EventTimestamp(-1.0, 10.0, -1.0)), Event("1", EventTimestamp(0.0, 10.0, 0.0)))
+    edge = AnalyticActivity(0, DiscretePMF(np.array([0.0, 1.0, 2.0, 3.0]), np.array([0.25, 0.25, 0.25, 0.25]), step=1))
     ctx = AnalyticContext(
         events=events,
         activities={(0, 1): (0, edge)},
@@ -314,7 +302,6 @@ def test_clipping_tolerates_rounding_errors() -> None:
     res = sim._convert_to_simulated_event(pmf, 0.0, 1.0)
     total = res.pmf.probabilities.sum() + float(res.underflow) + float(res.overflow)
     assert np.isclose(total, 1.0)
-
 
 
 @pytest.mark.parametrize(
@@ -414,18 +401,49 @@ def test_all_underflow_and_overflow_rule_combinations(
     [(under_rule, over_rule) for under_rule in UnderflowRule for over_rule in OverflowRule],
 )
 def test_rule_combinations_preserve_total_mass_and_non_negative_probabilities(
-    underflow_rule: UnderflowRule,
-    overflow_rule: OverflowRule,
+    underflow_rule: UnderflowRule, overflow_rule: OverflowRule
 ) -> None:
     result = _run_rule_case(underflow_rule, overflow_rule)
 
     assert np.all(result.pmf.probabilities >= 0.0)
-    assert np.isclose(
-        float(result.pmf.total_mass + result.underflow + result.overflow),
-        1.0,
-        rtol=1e-12,
-        atol=1e-15,
+    assert np.isclose(float(result.pmf.total_mass + result.underflow + result.overflow), 1.0, rtol=1e-12, atol=1e-15)
+
+
+@pytest.mark.parametrize(
+    ("values", "probabilities", "min_value", "max_value", "expected_values", "expected_probabilities"),
+    [
+        ([-2.0, -1.0], [0.25, 0.75], 0, 10, [0.0], [1.0]),
+        ([11.0, 12.0], [0.25, 0.75], 0, 10, [10.0], [1.0]),
+        ([-1.0, 11.0], [0.4, 0.6], 0, 10, [0.0, 10.0], [0.4, 0.6]),
+        ([0.0, 10.0], [0.4, 0.6], 5, 5, [5.0], [1.0]),
+    ],
+    ids=["underflow-only", "overflow-only", "both-sides", "coincident-bounds"],
+)
+def test_redistribute_without_inside_mass_anchors_each_side_at_its_bound(
+    values: list[float],
+    probabilities: list[float],
+    min_value: int,
+    max_value: int,
+    expected_values: list[float],
+    expected_probabilities: list[float],
+) -> None:
+    context = AnalyticContext(
+        (Event("event", EventTimestamp(0.0, 10.0, 0.0)),),
+        {},
+        (),
+        1,
+        UnderflowRule.REDISTRIBUTE,
+        OverflowRule.REDISTRIBUTE,
     )
+    propagator = create_analytic_propagator(context)
+    pmf = DiscretePMF(np.array(values), np.array(probabilities), step=1)
+
+    result = propagator._convert_to_simulated_event(pmf, min_value, max_value)
+
+    np.testing.assert_array_equal(result.pmf.values, expected_values)
+    np.testing.assert_allclose(result.pmf.probabilities, expected_probabilities, rtol=0.0, atol=1.0e-15)
+    assert result.underflow == 0.0
+    assert result.overflow == 0.0
 
 
 if __name__ == "__main__":

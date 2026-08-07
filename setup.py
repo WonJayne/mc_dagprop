@@ -1,58 +1,45 @@
-# encoding: utf-8
 # Legacy script, if you want to build without poetry etc..., just bare metal
 import os
+import runpy
 import sys
 import tomllib
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol, cast
 
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 
 
+class BuildFlagResolver(Protocol):
+    def __call__(self, platform: str, *, instrumented: bool, use_lto: bool) -> tuple[list[str], list[str]]: ...
+
+
+def load_build_flag_resolver() -> BuildFlagResolver:
+    """Load package build flags without relying on the backend's import path."""
+    script_path = Path(__file__).resolve().parent / "scripts" / "build_flags.py"
+    script_namespace = runpy.run_path(str(script_path))
+    try:
+        resolver = script_namespace["resolve_platform_build_flags"]
+    except KeyError as exc:
+        raise ImportError(f"build flag resolver is missing from {script_path}") from exc
+    if not callable(resolver):
+        raise TypeError(f"build flag resolver in {script_path} is not callable")
+    return cast(BuildFlagResolver, resolver)
+
+
 class GetPybindInclude:
     def __str__(self) -> str:
-        import pybind11
+        import pybind11  # noqa: PLC0415
 
         return pybind11.get_include()
 
 
-USE_LTO: Final[bool] = os.getenv("MC_DAGPROP_ENABLE_LTO", "1") == "1"
-
-
-def resolve_platform_build_flags() -> tuple[list[str], list[str]]:
-    """Return compile and linker flags for the active target platform."""
-    if sys.platform == "win32":
-        compile_args = [
-            "/O2",  # optimize for speed
-            "/Ot",  # favor speed over size
-            "/Ob2",  # inline any suitable functions
-            "/Oi",  # generate intrinsic functions for memcpy etc.
-            "/Oy",  # omit frame pointers
-            "/fp:fast",  # fast (non-strict) floating-point
-            "/Gy",  # enable function-level linking
-            "/std:c++20",
-        ]
-        linker_args = ["/INCREMENTAL:NO"]
-        if USE_LTO:
-            compile_args.append("/GL")
-            linker_args.append("/LTCG")
-        return compile_args, linker_args
-
-    compile_args = ["-O3", "-std=c++20"]
-    linker_args: list[str] = []
-
-    if USE_LTO:
-        compile_args.append("-flto")
-        linker_args.append("-flto")
-
-    if sys.platform.startswith("linux"):
-        compile_args.append("-fvisibility=hidden")
-
-    return compile_args, linker_args
-
-
-platform_compile_args, platform_linker_args = resolve_platform_build_flags()
+INSTRUMENTED: Final[bool] = os.getenv("MC_DAGPROP_INSTRUMENTED", "0") == "1"
+USE_LTO: Final[bool] = not INSTRUMENTED and os.getenv("MC_DAGPROP_ENABLE_LTO", "1") == "1"
+resolve_platform_build_flags = load_build_flag_resolver()
+platform_compile_args, platform_linker_args = resolve_platform_build_flags(
+    sys.platform, instrumented=INSTRUMENTED, use_lto=USE_LTO
+)
 
 # Read version from pyproject.toml if available so that the legacy
 # setuptools build produces the same package version as the Poetry

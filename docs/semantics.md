@@ -1,93 +1,116 @@
 # Propagation semantics
 
-`mc_dagprop` provides two propagation backends with deliberately different
-semantic roles.
+This document is the public behavioural contract for `mc_dagprop` 1.0 release
+candidates. The shared `PropagationContext` and `DelayFamilyRegistry` are the
+supported construction path when a model must be evaluated by both backends.
 
-## Analytic backend
+## Timestamps and event bounds
 
-The analytic propagator is a discrete-distribution implementation of the
-Büker/OnTime-style analytical delay-propagation view. It propagates probability
-mass functions (PMFs) over a DAG using marginal operations: edge delays are
-convolved with predecessor event-time PMFs, and multiple predecessors are
-combined with a marginal maximum operation.
+`EventTimestamp(earliest, latest, actual)` has one interpretation:
 
-For analytic propagation, each event's `latest` timestamp is a hard upper bound.
-Analytic event distributions are bounded to `[event.earliest, event.latest]`
-according to the configured underflow and overflow rules.
+- `earliest` is the deterministic release time. Every Monte Carlo event starts
+  at this value, and every analytic root is a Dirac mass at this value.
+- `latest` is a hard upper bound in analytic propagation. It is metadata in
+  Monte Carlo propagation and never clips a sampled event time.
+- `actual` is validated reference metadata for callers. Neither backend uses it
+  as a propagation input.
 
-Reconvergent DAGs with shared stochastic ancestry can violate the independence
-assumption implicit in marginal maximum formation. In those cases, analytic and
-Monte Carlo outputs may differ. This is a documented limitation of the current
-marginal implementation, not an implementation bug.
+All timestamp values must be finite and satisfy
+`earliest <= actual <= latest`. Analytic timestamps and activity increments must
+also align with the positive integer `step`, expressed in seconds.
 
-A low-level conditional convolution primitive is available for exact, small
-PMF calculations, but it is deliberately not wired into the main propagator.
-Full Büker-style route-conflict handling requires a complete conflict and
-interlinking model in addition to conditional convolution; that conflict-aware
-extension is intentionally out of scope for this pass.
+For a non-root event, propagation applies the maximum of its release time and
+all incoming predecessor completion times. Analytic clipping implements this
+lower release bound according to the configured underflow policy.
 
-## Monte Carlo backend
+## Activities and delay units
 
-The Monte Carlo propagator samples realised edge delays and propagates realised
-event times. It is a validation/reference backend for controlled cases, not a
-semantic requirement for equivalence with the analytic backend on arbitrary
-DAGs.
+Activity indices are contiguous integers starting at zero. Activity types are
+non-negative integers. A type without a registered family has deterministic
+zero extra delay; the activity still contributes its `minimal_duration`.
+Negative activity types, duplicate family registrations, duplicate
+predecessors, dangling activities, and cycles are rejected.
 
-For Monte Carlo propagation, `latest` is semantic metadata only. Realised event
-times are not capped by `latest`.
+`minimal_duration` and empirical absolute delays are seconds. Other family
+parameters are dimensionless:
 
-## Delay-family registration
+| Family | Extra delay |
+|---|---|
+| Unregistered | `0` |
+| Constant | `minimal_duration * factor` |
+| Empirical absolute | sampled `value` in seconds |
+| Empirical relative (low-level API) | `minimal_duration * sampled factor`; factors are dimensionless |
+| Exponential | `minimal_duration * X`, where `X` has exponential mean parameter `scale` and is conditioned on `X <= max_scale` |
+| Gamma | `minimal_duration * X`, where `X ~ Gamma(shape, scale)` and is conditioned on `X <= max_scale` |
 
-Unregistered activity types are deterministic and add no stochastic extra delay:
-the activity contributes only its configured minimal duration.
+The shared `DelayFamilyRegistry.add_empirical(...)` API registers empirical
+absolute extra delays in seconds. Relative empirical factors are available only
+through the low-level `GenericDelayGenerator.add_empirical_relative(...)` API.
 
-Each stochastic delay family may be registered at most once per activity type.
-Registering a second family for the same activity type is an error. The
-activity type `-1` is reserved as an internal deterministic no-delay sentinel:
-users must not register stochastic delay families for `-1`, and an unregistered
-`-1` activity remains deterministic like any other unregistered type.
+All values and parameters must be finite; durations, factors, empirical values,
+and weights must be non-negative; continuous distribution parameters must be
+positive. A finite input combination that overflows during multiplication,
+sampling, or propagation raises `OverflowError` instead of producing infinity.
 
-## Activity durations and discrete PMFs
+## Analytic PMFs and bounds
 
-Every activity has a deterministic minimal duration. Registered delay families
-model stochastic extra delay added on top of that minimal duration; unregistered
-activity types have zero stochastic extra delay and therefore contribute only the
-minimal duration. Monte Carlo samples realised edge durations as minimal duration
-plus sampled extra delay. Shared frontend analytic construction converts the
-same extra-delay families into full edge-increment PMFs by shifting them by the
-minimal duration.
+Analytic PMFs live on a zero-origin integer grid. All binary PMF operations
+require equal grid steps. Continuous families are converted to the distribution
+of `floor(sample / step) * step`, conditional on their exact finite cutoff; a
+partial final bin is retained when the cutoff is not grid-aligned.
 
-Analytic PMFs are strict discrete-grid objects: support values must be finite,
-grid-aligned integer-step values and probabilities must be finite,
-non-negative, and normalized unless a policy explicitly creates a documented
-sub-probability result. Analytic `latest` remains a hard clipping bound; Monte
-Carlo `latest` remains metadata and does not cap realised samples.
+Analytic bound policies have explicit mass semantics:
 
+- `TRUNCATE` moves outside mass to the nearest bound and preserves total mass.
+- `REMOVE` drops outside mass without renormalizing and reports it as event
+  underflow or overflow. If all mass is removed, propagation continues with an
+  explicit zero-mass sub-PMF anchored at the relevant bound or bounds.
+- `REDISTRIBUTE` conditions on retained support. If no inside support exists,
+  underflow is anchored at the lower bound and overflow at the upper bound.
 
-## Clipping policies
+## Qualified backend equivalence
 
-Analytic clipping policies have explicit mass semantics:
+Universal analytic/Monte Carlo equivalence is not claimed. Call
+`validate_equivalence_domain(context, registry, step=..., mode=...)` before
+relying on a parity guarantee.
 
-- `TRUNCATE` moves mass below/above the bound to the nearest boundary bin. If the
-  boundary bin is missing it is inserted; if it already exists the mass is
-  merged. Total PMF mass is preserved.
-- `REMOVE` removes out-of-bound mass without renormalizing retained support. The
-  resulting PMF is an explicit sub-probability PMF, and removed mass is reported
-  as event underflow/overflow. If no support remains inside the event window, a
-  clear error is raised instead of returning an empty PMF.
-- `REDISTRIBUTE` removes out-of-bound mass and renormalizes/conditionalizes the
-  retained support. If no inside support exists, mass is anchored at the lower
-  bound.
+`EquivalenceMode.EXACT_DISCRETE` requires:
 
-Use `step=1` for exact unit tests. A coarser `step=3` can be practical for
-examples or exploratory runs when that grid is appropriate for the timetable.
+1. grid-aligned deterministic or empirical activity increments;
+2. independent stochastic activity ancestry on all branches entering a merge;
+3. no duplicate predecessor; and
+4. nonbinding analytic event bounds.
 
-## Reproducibility
+Within this domain, analytic event PMFs equal exhaustive enumeration up to
+floating-point roundoff. Monte Carlo frequencies converge statistically to the
+same PMFs.
 
-The recommended Monte Carlo reproducibility mechanism is passing `seed` to
-`MonteCarloPropagator.run(seed=...)` or a deterministic seed sequence to
-`run_many(...)`. The lower-level `GenericDelayGenerator.set_seed(...)` remains
-available for direct generator use; a per-run seed resets the propagator's
-reusable generator state for that run.
+`EquivalenceMode.QUANTIZED_CONTINUOUS` has the same structural and nonbinding-
+bound requirements but also permits exponential and gamma families. Parity is
+defined by flooring every sampled stochastic activity extra delay to the
+analytic grid before event propagation. It is statistical, not sample-by-
+sample. Flooring only a final event time is not equivalent on a multi-activity
+path because floor quantization is not additive.
 
-`max_delay` is no longer part of the public semantics or API.
+Reconvergent branches that share a stochastic ancestor are rejected by analytic
+validation. Propagating only the incoming marginals would incorrectly treat
+those correlated branches as independent. Deterministic shared ancestry remains
+valid.
+
+## Seeds and thread safety
+
+Activity types, activity indices, and event indices use the non-negative
+signed-32-bit domain `[0, 2**31 - 1]`. Boolean values are rejected rather than
+coerced to integers. Seeds are a separate unsigned 64-bit domain.
+
+`run(seed)` accepts an integer in `[0, 2**64 - 1]`. Within a fixed package build
+and platform, the model and seed uniquely determine a result. Cross-platform
+bit identity is not promised because standard-library distribution algorithms
+may differ. `run_many(seeds)` preserves input order and is exactly the ordered
+equivalent of independent `run(seed)` calls, including repeated seeds.
+
+Each run owns its RNG, distribution state, and scratch buffers. Concurrent
+`run` and `run_many` calls on the same `MonteCarloPropagator` are therefore safe,
+schedule-independent, and reproducible within that build/platform. Contexts and
+propagators are immutable after construction. Mutating a `DelayFamilyRegistry`
+concurrently with model construction is not supported.

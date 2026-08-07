@@ -34,8 +34,8 @@ which promotes innovative studies in transport management and the future of mobi
 - **Deterministic analytic propagator** for full event-time PMFs.
 - Custom per-activity-type stochastic extra-delay distributions:
   - Constant
-  - Exponential (`scale` is the mean)
-  - Gamma
+  - Exponential (dimensionless mean factor `scale`)
+  - Gamma (dimensionless `shape`, `scale`, and truncation factor)
   - Empirical absolute/relative
 - Single-run (`run(seed)`) and batched (`run_many(seeds)`) Monte Carlo APIs.
 - Shared DAG concepts (`Event`, `Activity`, `DagContext`) and unified naming.
@@ -48,7 +48,7 @@ which promotes innovative studies in transport management and the future of mobi
 
 ## Installation
 
-This library requires **Python 3.12** or newer.
+This library supports **CPython 3.12, 3.13, and 3.14**.
 
 ```bash
 # with poetry
@@ -57,6 +57,20 @@ poetry add mc-dagprop
 # or with pip
 pip install mc-dagprop
 ```
+
+PyPI does not select a release candidate while a stable release is available.
+Install this candidate explicitly when validating `1.0.0rc1`:
+
+```bash
+pip install "mc-dagprop==1.0.0rc1"
+# or
+poetry add "mc-dagprop==1.0.0rc1"
+```
+
+Binary wheels are tested natively on Linux x86_64 and ARM64
+(`manylinux_2_28`), Windows AMD64, and macOS x86_64 and ARM64. The source
+distribution is installed and tested from outside the checkout on the same
+platform matrix and all supported Python versions.
 
 ---
 
@@ -77,7 +91,7 @@ from mc_dagprop import (
 
 events = [
   Event("A", EventTimestamp(0.0, 100.0, 0.0)),
-  Event("B", EventTimestamp(10.0, 100.0, 0.0)),
+  Event("B", EventTimestamp(10.0, 100.0, 10.0)),
 ]
 activities = {(0, 1): Activity(idx=0, minimal_duration=60.0, activity_type=1)}
 precedence = [(1, [(0, 0)])]
@@ -105,7 +119,9 @@ print(analytic.run()[1].pmf.values)   # full edge-increment PMF shifted by base 
 ```
 
 `Simulator` remains available as a compatibility alias of
-`MonteCarloPropagator`. `max_delay` is no longer part of the public API. For exponential delay families, use `scale` as the mean; `lambda_` exists only as a deprecated compatibility alias.
+`MonteCarloPropagator`. Delay-family `scale` parameters are dimensionless
+factors multiplied by the activity's minimal duration. The ambiguous `lambda_`
+compatibility alias has been removed before 1.0.
 
 ---
 
@@ -124,7 +140,7 @@ from mc_dagprop import (
 )
 from mc_dagprop.analytic import AnalyticActivity, exponential_pmf
 
-step = 1.0
+step = 1
 
 delay_pmf = exponential_pmf(scale=10.0, step=step, start=0.0, stop=300.0)
 
@@ -170,9 +186,11 @@ Notes:
   prevents tiny probabilities from being lost to cumulative floating-point
   drift in deep analytic propagation chains.
 - The analytic backend bounds each event distribution to `[event.earliest, event.latest]`; `latest` is a hard bound. Use `step=1` for exact tests; a coarser `step=3` may be practical for examples when the timetable grid supports it.
-- Clipping policies are explicit: `TRUNCATE` moves mass to the nearest boundary and preserves total mass; `REMOVE` reports removed mass and returns an explicit sub-probability PMF; `REDISTRIBUTE` conditionalizes the retained mass.
+- Clipping policies are explicit: `TRUNCATE` moves mass to the nearest boundary and preserves total mass; `REMOVE` reports removed mass and returns an explicit sub-probability PMF, including a zero-mass PMF when everything is removed; `REDISTRIBUTE` conditionalizes retained mass or anchors each outside tail at its corresponding bound when none remains.
 - The Monte Carlo backend treats `latest` as semantic metadata and does not cap realised event times.
-- Analytic propagation is marginal PMF propagation. It is not generally exact on reconvergent DAGs with shared stochastic ancestry. A low-level conditional convolution primitive is tested for small PMFs, but full Büker-style route-conflict handling, interlinking/connection modelling, train priorities, and exact joint-distribution propagation are intentionally out of scope.
+- Analytic construction rejects reconvergent merges whose branches share
+  stochastic activity ancestry. Use `validate_equivalence_domain(...)` before
+  relying on exact-discrete or quantized-continuous cross-backend parity.
 
 ---
 
@@ -197,9 +215,9 @@ from mc_dagprop import Simulator
 Cross-platform wheel builds are configured through GitHub Actions in
 `.github/workflows/build-wheels.yml` using `cibuildwheel`.
 
-- **Windows** (`windows-latest`)
-- **macOS** (`macos-latest`, `x86_64` and `arm64`)
-- **Linux** (`ubuntu-latest`)
+- **Windows AMD64** (`windows-latest`)
+- **macOS x86_64 and ARM64** (native Intel and Apple Silicon runners)
+- **Linux x86_64 and ARM64** (`manylinux_2_28`)
 
 To run a local source build without the CI workflow:
 
@@ -208,8 +226,37 @@ python -m pip install --upgrade build
 python -m build
 ```
 
+The Python examples in this README and the non-interactive demo paths are
+executed in CI. The repository uses the same Black, Ruff, BasedPyright, and
+pytest check pattern as OpenBus:
+
+```bash
+./scripts/check.sh
+python -m pytest --cov=mc_dagprop --cov-branch --cov-fail-under=85
+```
+
+The vendored C++ dependency notices are retained in
+[`THIRD_PARTY_NOTICES.md`](https://github.com/WonJayne/mc_dagprop/blob/main/THIRD_PARTY_NOTICES.md).
+
 ## References
 
 [^1]: Büker, T., et al. (2018). Delay propagation in stochastic railway networks.
 [^2]: Subsequent extensions used in SORRI for timetable robustness analysis.
 [^3]: De Wilde, B., et al. Event-based simulation approaches for railway delay analysis.
+
+
+## Release-candidate semantics
+
+`mc_dagprop` evaluates fixed-precedence event-activity DAGs. OpenBus constructs operational graphs upstream, resolves or selects resource precedence orders, and passes deterministic or stochastic separation activities into `PropagationContext`. The current kernel evaluates fixed precedence graphs. Dynamic conflict-order selection and dispatching policies are outside `mc_dagprop` and must be represented by alternative graphs or future policy layers.
+
+The complete timestamp, bound, unit, activity-type, seed, overflow, thread-safety,
+and qualified-equivalence contracts are frozen in
+[`docs/semantics.md`](https://github.com/WonJayne/mc_dagprop/blob/main/docs/semantics.md).
+In particular, analytic `latest` is a
+hard bound while Monte Carlo retains it as metadata, and universal equivalence
+outside the validated domain is not claimed.
+
+See
+[`docs/openbus_integration.md`](https://github.com/WonJayne/mc_dagprop/blob/main/docs/openbus_integration.md)
+and [`RELEASE_NOTES.md`](https://github.com/WonJayne/mc_dagprop/blob/main/RELEASE_NOTES.md)
+for integration and release details.

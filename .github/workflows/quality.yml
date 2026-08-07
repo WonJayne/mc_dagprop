@@ -1,0 +1,120 @@
+name: Quality and tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: python -m pip install --disable-pip-version-check poetry==2.4.1
+
+      - name: Use an in-project virtual environment
+        run: poetry config virtualenvs.in-project true
+
+      - name: Cache Poetry environment
+        uses: actions/cache@v5
+        with:
+          path: .venv
+          key: poetry-${{ runner.os }}-py3.12-${{ hashFiles('poetry.lock', 'pyproject.toml') }}
+
+      - name: Install project and development dependencies
+        run: poetry install --with dev --extras plot --no-interaction
+
+      # BasedPyright resolves the checked-out package before site-packages. Build
+      # its native runtime module beside the tracked stub so the unqualified
+      # reportMissingModuleSource diagnostic remains enabled and meaningful.
+      - name: Build native module for source-tree type resolution
+        run: poetry run python setup.py build_ext --inplace --force
+
+      - name: Run formatting, linting, and public typing checks
+        run: ./scripts/check.sh
+
+      - name: Run tests with the coverage gate
+        run: >-
+          poetry run pytest
+          --cov=mc_dagprop
+          --cov-branch
+          --cov-report=term-missing
+          --cov-report=xml
+          --cov-fail-under=85
+
+      - name: Execute README examples
+        run: poetry run python scripts/run_readme_examples.py
+
+      - name: Execute demos without interactive output
+        run: |
+          poetry run python -m demo.analytic
+          poetry run python -m demo.monte_carlo
+          poetry run python -m demo.distribution --trials 100 --no-show
+
+  cpp_coverage:
+    name: C++ coverage gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install coverage build dependencies
+        run: >-
+          python -m pip install --disable-pip-version-check
+          gcovr numpy plotly pybind11 pytest setuptools wheel
+
+      - name: Build instrumented extension
+        env:
+          CC: gcc
+          CXX: g++
+          CXXFLAGS: -O0 -g --coverage
+          LDFLAGS: --coverage
+          MC_DAGPROP_ENABLE_LTO: "0"
+          MC_DAGPROP_INSTRUMENTED: "1"
+        run: |
+          python setup.py egg_info
+          python setup.py build_ext --inplace --force
+
+      - name: Run tests against instrumented extension
+        env:
+          PYTHONPATH: src
+        # The large-scale throughput benchmark multiplies gcov overhead by
+        # 40 million event visits. Concurrency correctness remains covered by
+        # the focused same-instance race tests in this job's collected suite.
+        run: python -m pytest -q -k "not test_multithreading"
+
+      - name: Enforce C++ line and branch coverage
+        run: >-
+          gcovr
+          --root .
+          --filter src/mc_dagprop/monte_carlo/_core.cpp
+          --exclude src/mc_dagprop/monte_carlo/_custom_rng.hpp
+          --fail-under-line 90
+          --fail-under-branch 50
+          --txt
+          --xml coverage-cpp.xml
