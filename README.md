@@ -48,10 +48,11 @@ which promotes innovative studies in transport management and the future of mobi
 
 ## Installation
 
-This library requires **CPython 3.12 or later**. Binary wheels are currently
-built and tested for CPython 3.12 through 3.15. Newer CPython releases are
-not rejected by package metadata and can build from the source distribution
-until their wheel builds enter the release matrix.
+This library requires **CPython 3.12 or later**. Binary wheels are selected
+with an open-ended CPython 3 pattern, while source-distribution installs are
+currently tested on CPython 3.12 through 3.14. Newer CPython releases are not
+rejected by package metadata and can build from the source distribution until
+they enter the tested release matrix.
 
 ```bash
 # with poetry

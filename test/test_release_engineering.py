@@ -86,7 +86,7 @@ def test_python_compatibility_has_no_artificial_upper_bound() -> None:
         workflow = (repository_root / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
         assert "CIBW_BUILD: cp3*-*" in workflow
         assert "CIBW_SKIP: cp*t-* pp* *-musllinux_*" in workflow
-        assert 'python: ["3.12", "3.13", "3.14", "3.15"]' in workflow
+        assert 'python: ["3.12", "3.13", "3.14"]' in workflow
 
 
 def test_contributor_entrypoints_use_only_the_openbus_quality_toolchain() -> None:

@@ -6,8 +6,8 @@
   declares CPython 3.12 as its minimum without rejecting later interpreters.
 - Replaces the wheel workflow's explicit CPython-version allowlist with a
   `cp3*` selector, while retaining the package minimum through
-  `requires-python`; RC2 adds ordinary CPython 3.15 to the tested wheel and
-  source-distribution matrix.
+  `requires-python`; source-distribution installs are tested through CPython
+  3.14 without rejecting later versions that are not yet available in CI.
 - Explicitly excludes free-threaded builds until their concurrency semantics
   are validated.
 - Removes the build-time setuptools upper bound so future Python source builds
