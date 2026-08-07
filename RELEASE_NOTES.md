@@ -1,5 +1,18 @@
 # Release Notes
 
+## 1.0.0rc2
+
+- Removes the artificial Python `<3.15` package-metadata bound. The package now
+  declares CPython 3.12 as its minimum without rejecting later interpreters.
+- Replaces the wheel workflow's explicit CPython-version allowlist with a
+  `cp3*` selector, while retaining the package minimum through
+  `requires-python`; RC2 adds ordinary CPython 3.15 to the tested wheel and
+  source-distribution matrix.
+- Explicitly excludes free-threaded builds until their concurrency semantics
+  are validated.
+- Removes the build-time setuptools upper bound so future Python source builds
+  can select a compatible backend release.
+
 ## 1.0.0rc1
 
 This release candidate freezes the first supported public semantics and is

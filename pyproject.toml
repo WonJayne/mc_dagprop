@@ -1,6 +1,6 @@
 [project]
 name = "mc-dagprop"
-version = "1.0.0rc1"
+version = "1.0.0rc2"
 description = "Discrete analytic DAG propagation with Monte Carlo validation backend"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" },
@@ -11,10 +11,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Programming Language :: Python :: Implementation :: CPython",
     "Typing :: Typed",
 ]
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.12"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
@@ -41,12 +42,12 @@ pybind11 = ">=2.13"
 pytest = "^8.3.5"
 pytest-cov = "^7.0.0"
 ruff = "0.15.6"
-setuptools = ">=77,<83"
+setuptools = ">=77"
 twine = "^6.2.0"
 
 [build-system]
 requires = [
-    "setuptools>=77,<83",
+    "setuptools>=77",
     "wheel",
     "pybind11>=2.13",
 ]

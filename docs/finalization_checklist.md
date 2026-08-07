@@ -18,7 +18,7 @@ only after the release-candidate branch satisfies every gate.
 | Distribution tests | Wheels and the source distribution install and run outside the checkout on every documented Python/platform target. |
 | Packaging and legal | The sdist contains C++ headers; wheel/sdist metadata and contents pass smoke checks; third-party notices ship in both formats. |
 | Release identity | `v<version>` exactly matches `project.version`; the check runs before publish jobs. |
-| Release sequence | Publish `1.0.0rc1`, validate its artifacts from PyPI, then decide separately whether to create the final `1.0.0` tag. |
+| Release sequence | Publish `1.0.0rc2`, validate its artifacts from PyPI, then decide separately whether to create the final `1.0.0` tag. |
 
 No migration guide is required for the pre-1.0 API because breaking cleanup is
 explicitly allowed for this release candidate.

@@ -70,8 +70,23 @@ def test_source_tree_type_build_dependencies_are_in_the_locked_dev_environment()
         pyproject = tomllib.load(pyproject_file)
 
     development_dependencies = pyproject["tool"]["poetry"]["group"]["dev"]["dependencies"]
-    assert development_dependencies["setuptools"] == ">=77,<83"
+    assert development_dependencies["setuptools"] == ">=77"
     assert development_dependencies["pybind11"] == ">=2.13"
+
+
+def test_python_compatibility_has_no_artificial_upper_bound() -> None:
+    repository_root = Path(__file__).resolve().parents[1]
+    with (repository_root / "pyproject.toml").open("rb") as pyproject_file:
+        pyproject = tomllib.load(pyproject_file)
+
+    assert pyproject["project"]["requires-python"] == ">=3.12"
+    assert pyproject["build-system"]["requires"][0] == "setuptools>=77"
+
+    for workflow_name in ("build-wheels.yml", "publish.yml"):
+        workflow = (repository_root / ".github" / "workflows" / workflow_name).read_text(encoding="utf-8")
+        assert "CIBW_BUILD: cp3*-*" in workflow
+        assert "CIBW_SKIP: cp*t-* pp* *-musllinux_*" in workflow
+        assert 'python: ["3.12", "3.13", "3.14", "3.15"]' in workflow
 
 
 def test_contributor_entrypoints_use_only_the_openbus_quality_toolchain() -> None:

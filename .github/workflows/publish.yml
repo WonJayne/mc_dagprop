@@ -67,11 +67,14 @@ jobs:
         uses: pypa/cibuildwheel@v4.2.0
         env:
           CIBW_ARCHS: ${{ matrix.arch }}
-          CIBW_BUILD: cp312-* cp313-* cp314-*
+          # requires-python supplies the lower bound. The generic selector lets
+          # future cibuildwheel releases add new stable CPython versions without
+          # another project-side allowlist change.
+          CIBW_BUILD: cp3*-*
           CIBW_BUILD_FRONTEND: build
           CIBW_MANYLINUX_AARCH64_IMAGE: manylinux_2_28
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-          CIBW_SKIP: pp* *-musllinux_*
+          CIBW_SKIP: cp*t-* pp* *-musllinux_*
           CIBW_TEST_COMMAND: >-
             python -I {project}/scripts/smoke_installed_distribution.py
             --source-root {project}
@@ -116,7 +119,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.12", "3.13", "3.14"]
+        python: ["3.12", "3.13", "3.14", "3.15"]
         platform: [linux-x86_64, linux-arm64, windows-amd64, macos-x86_64, macos-arm64]
         include:
           - platform: linux-x86_64

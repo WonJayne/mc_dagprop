@@ -48,7 +48,10 @@ which promotes innovative studies in transport management and the future of mobi
 
 ## Installation
 
-This library supports **CPython 3.12, 3.13, and 3.14**.
+This library requires **CPython 3.12 or later**. Binary wheels are currently
+built and tested for CPython 3.12 through 3.15. Newer CPython releases are
+not rejected by package metadata and can build from the source distribution
+until their wheel builds enter the release matrix.
 
 ```bash
 # with poetry
@@ -59,18 +62,18 @@ pip install mc-dagprop
 ```
 
 PyPI does not select a release candidate while a stable release is available.
-Install this candidate explicitly when validating `1.0.0rc1`:
+Install this candidate explicitly when validating `1.0.0rc2`:
 
 ```bash
-pip install "mc-dagprop==1.0.0rc1"
+pip install "mc-dagprop==1.0.0rc2"
 # or
-poetry add "mc-dagprop==1.0.0rc1"
+poetry add "mc-dagprop==1.0.0rc2"
 ```
 
 Binary wheels are tested natively on Linux x86_64 and ARM64
 (`manylinux_2_28`), Windows AMD64, and macOS x86_64 and ARM64. The source
 distribution is installed and tested from outside the checkout on the same
-platform matrix and all supported Python versions.
+platform matrix and all currently maintained Python versions.
 
 ---
 
