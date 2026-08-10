@@ -1,5 +1,16 @@
 # Release Notes
 
+## 1.0.1rc1
+
+- Aligns analytic propagation with the Büker--Seybold method by treating
+  incoming event-time marginals as independent at merges, including dependent
+  reconvergence.
+- Keeps strict stochastic-ancestry validation as an explicit diagnostic and as
+  a requirement of the qualified analytic/Monte Carlo equivalence domains.
+- Corrects floating-point PMF mass before validating convolution and maximum
+  results, preventing large analytical networks from failing on harmless
+  cumulative roundoff above unit mass.
+
 ## 1.0.0rc1
 
 This release candidate freezes the first supported public semantics and is

@@ -34,6 +34,15 @@ class TestDiscretePMF(unittest.TestCase):
         self.assertTrue(np.isclose(float(result.total_mass), 1.0, rtol=1e-12, atol=1e-15))
         self.assertTrue(np.all(result.probabilities >= 0.0))
 
+    def test_maximum_corrects_mass_before_validating_operation_result(self) -> None:
+        accepted_roundoff = np.array([0.5, 0.5000000000009])
+        pmf = DiscretePMF(np.array([0.0, 1.0]), accepted_roundoff, step=1, allow_subprobability=True)
+
+        result = pmf.maximum(pmf)
+
+        self.assertEqual(float(result.total_mass), 1.0)
+        np.testing.assert_allclose(result.probabilities, [0.25, 0.75], rtol=0.0, atol=1.0e-12)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,7 +16,7 @@ from mc_dagprop import (
     MonteCarloPropagator,
     create_analytic_propagator,
 )
-from mc_dagprop.analytic import AnalyticActivity, OverflowRule, UnderflowRule
+from mc_dagprop.analytic import AnalyticActivity, OverflowRule, UnderflowRule, validate_exact_equivalence_domain
 
 
 @dataclass(frozen=True)
@@ -231,8 +231,8 @@ def test_duplicate_delay_family_registration_raises_error() -> None:
         generator.add_exponential(1, 1.0, 2.0)
 
 
-def test_reconvergent_shared_stochastic_ancestry_is_rejected() -> None:
-    """Exact analytic propagation rejects dependent marginals at reconvergence."""
+def test_reconvergent_shared_stochastic_ancestry_uses_marginal_approximation() -> None:
+    """Propagation follows Büker--Seybold while strict validation remains available."""
 
     values = np.array([0.0, 1.0])
     probabilities = np.array([0.5, 0.5])
@@ -253,5 +253,9 @@ def test_reconvergent_shared_stochastic_ancestry_is_rejected() -> None:
         underflow_rule=UnderflowRule.TRUNCATE,
         overflow_rule=OverflowRule.TRUNCATE,
     )
+    result = create_analytic_propagator(analytic_context).run()[4].pmf
+
+    np.testing.assert_array_equal(result.values, [0.0, 1.0])
+    np.testing.assert_allclose(result.probabilities, [0.25, 0.75])
     with pytest.raises(ValueError, match="disjoint stochastic ancestry at merge 4"):
-        create_analytic_propagator(analytic_context)
+        validate_exact_equivalence_domain(analytic_context)

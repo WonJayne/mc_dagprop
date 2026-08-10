@@ -133,12 +133,18 @@ class DiscretePMF:
             allow_subprobability=self.allow_subprobability,
         )
 
-    def _rescale(self, expected: float) -> DiscretePMF:
-        probs = self.probabilities.copy()
-        total = float(cast(np.float64, probs.sum()))
-        if total > 0 and not np.isclose(total, expected, rtol=1e-12, atol=1e-15):
-            probs *= expected / total
-        return DiscretePMF(self.values.copy(), probs, step=self.step, allow_subprobability=expected < 1.0)
+    @staticmethod
+    def _from_operation(
+        values: FloatArray, probabilities: npt.ArrayLike, step: int, expected_mass: float
+    ) -> DiscretePMF:
+        """Construct an operation result after correcting floating-point mass drift."""
+        corrected = np.asarray(probabilities, dtype=np.float64).copy()
+        total = np.sum(corrected.astype(np.longdouble), dtype=np.longdouble)
+        if total > 0.0:
+            corrected = (corrected.astype(np.longdouble) * (np.longdouble(expected_mass) / total)).astype(np.float64)
+        elif expected_mass > 0.0:
+            raise ArithmeticError("PMF operation lost all positive probability mass")
+        return DiscretePMF(values, corrected, step=step, allow_subprobability=expected_mass < 1.0)
 
     @staticmethod
     def _expected_mass(m1: float, m2: float) -> float:
@@ -170,19 +176,20 @@ class DiscretePMF:
             np.allclose(np.diff(other.values), other.step, rtol=0.0, atol=1e-9) if len(other.values) > 1 else True
         )
         if self_contiguous and other_contiguous:
+            expected_mass = self._expected_mass(float(self.total_mass), float(other.total_mass))
             if len(self.values) == 1:
-                pmf = DiscretePMF(
+                return self._from_operation(
                     other.values + cast(np.float64, self.values[0]),
                     other.probabilities * cast(np.float64, self.probabilities[0]),
-                    step=self.step,
-                    allow_subprobability=True,
+                    self.step,
+                    expected_mass,
                 )
             elif len(other.values) == 1:
-                pmf = DiscretePMF(
+                return self._from_operation(
                     self.values + cast(np.float64, other.values[0]),
                     self.probabilities * cast(np.float64, other.probabilities[0]),
-                    step=self.step,
-                    allow_subprobability=True,
+                    self.step,
+                    expected_mass,
                 )
             else:
                 start_value = float(cast(np.float64, self.values[0])) + float(cast(np.float64, other.values[0]))
@@ -190,8 +197,7 @@ class DiscretePMF:
                     self.probabilities.astype(np.longdouble), other.probabilities.astype(np.longdouble)
                 ).astype(np.float64)
                 values = start_value + self.step * np.arange(len(probabilities), dtype=np.float64)
-                pmf = DiscretePMF(values, probabilities, step=self.step, allow_subprobability=True)
-            return pmf._rescale(self._expected_mass(float(self.total_mass), float(other.total_mass)))
+                return self._from_operation(values, probabilities, self.step, expected_mass)
 
         masses: dict[float, np.longdouble] = {}
         self_values = cast(Iterable[np.float64], self.values)
@@ -207,8 +213,9 @@ class DiscretePMF:
         values = np.array(sorted(masses), dtype=np.float64)
         value_items = cast(Iterable[np.float64], values)
         probabilities = np.array([masses[float(value)] for value in value_items], dtype=np.float64)
-        pmf = DiscretePMF(values, probabilities, step=self.step, allow_subprobability=True)
-        return pmf._rescale(self._expected_mass(float(self.total_mass), float(other.total_mass)))
+        return self._from_operation(
+            values, probabilities, self.step, self._expected_mass(float(self.total_mass), float(other.total_mass))
+        )
 
     def maximum(self, other: DiscretePMF) -> DiscretePMF:
         """Return PMF of ``max(X, Y)`` with stable cumulative arithmetic."""
@@ -226,8 +233,9 @@ class DiscretePMF:
         maximum_cdf = cdf_on_support(self) * cdf_on_support(other)
         probabilities = np.diff(np.concatenate((np.array([0.0], dtype=np.longdouble), maximum_cdf)))
         probabilities = np.maximum(probabilities, np.longdouble(0.0))
-        pmf = DiscretePMF(support, probabilities.astype(float), step=self.step, allow_subprobability=True)
-        return pmf._rescale(self._expected_mass(float(self.total_mass), float(other.total_mass)))
+        return self._from_operation(
+            support, probabilities, self.step, self._expected_mass(float(self.total_mass), float(other.total_mass))
+        )
 
     def conditional_convolve_sum_le(self, other: DiscretePMF, threshold: Second) -> DiscretePMF:
         """Return ``X + Y`` conditioned on ``X + Y <= threshold``.
