@@ -248,8 +248,6 @@ def validate_context(context: AnalyticContext) -> None:
     if len(topological_order) != n_events:
         raise ValueError("precedence list contains a cycle")
 
-    _validate_exact_equivalence_domain(context, topological_order)
-
 
 def _is_stochastic(pmf: DiscretePMF) -> bool:
     """Return whether ``pmf`` contains more than one possible value."""
@@ -283,10 +281,12 @@ def _validate_exact_equivalence_domain(context: AnalyticContext, topological_ord
 def validate_exact_equivalence_domain(context: AnalyticContext) -> None:
     """Validate the stochastic-independence domain required for exact propagation.
 
-    ``validate_context`` performs this check automatically. This standalone
-    helper is exposed for callers that need to state or inspect the exactness
-    contract explicitly after structural validation.
+    The analytic propagator intentionally combines incoming marginal PMFs under
+    the Büker--Seybold independence approximation. Call this helper explicitly
+    when a caller instead needs to require disjoint stochastic ancestry at every
+    merge.
     """
+    validate_context(context)
     event_count = len(context.events)
     adjacency: list[list[int]] = [[] for _ in range(event_count)]
     indegree = [0] * event_count

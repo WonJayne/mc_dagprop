@@ -59,12 +59,12 @@ pip install mc-dagprop
 ```
 
 PyPI does not select a release candidate while a stable release is available.
-Install this candidate explicitly when validating `1.0.0rc1`:
+Install this candidate explicitly when validating `1.0.1rc1`:
 
 ```bash
-pip install "mc-dagprop==1.0.0rc1"
+pip install "mc-dagprop==1.0.1rc1"
 # or
-poetry add "mc-dagprop==1.0.0rc1"
+poetry add "mc-dagprop==1.0.1rc1"
 ```
 
 Binary wheels are tested natively on Linux x86_64 and ARM64
@@ -188,9 +188,11 @@ Notes:
 - The analytic backend bounds each event distribution to `[event.earliest, event.latest]`; `latest` is a hard bound. Use `step=1` for exact tests; a coarser `step=3` may be practical for examples when the timetable grid supports it.
 - Clipping policies are explicit: `TRUNCATE` moves mass to the nearest boundary and preserves total mass; `REMOVE` reports removed mass and returns an explicit sub-probability PMF, including a zero-mass PMF when everything is removed; `REDISTRIBUTE` conditionalizes retained mass or anchors each outside tail at its corresponding bound when none remains.
 - The Monte Carlo backend treats `latest` as semantic metadata and does not cap realised event times.
-- Analytic construction rejects reconvergent merges whose branches share
-  stochastic activity ancestry. Use `validate_equivalence_domain(...)` before
-  relying on exact-discrete or quantized-continuous cross-backend parity.
+- Analytic construction follows the Büker--Seybold marginal approximation: it
+  combines incoming event-time PMFs as independent. This is exact for disjoint
+  stochastic ancestry and approximate when correlated branches reconverge.
+  Use `validate_exact_equivalence_domain(...)` to reject such reconvergence, or
+  `validate_equivalence_domain(...)` before relying on cross-backend parity.
 
 ---
 

@@ -92,10 +92,20 @@ analytic grid before event propagation. It is statistical, not sample-by-
 sample. Flooring only a final event time is not equivalent on a multi-activity
 path because floor quantization is not additive.
 
-Reconvergent branches that share a stochastic ancestor are rejected by analytic
-validation. Propagating only the incoming marginals would incorrectly treat
-those correlated branches as independent. Deterministic shared ancestry remains
-valid.
+## Dependence at merges
+
+The analytic propagator follows the Büker--Seybold marginal method. It stores one
+PMF per event and combines incoming event-time PMFs as independent at a merge.
+This is exact when the branches have disjoint stochastic ancestry. If they share
+an earlier stochastic activity, their event times are correlated and the method
+deliberately discards that dependence. Monte Carlo preserves it because every
+run samples the shared activity once and reuses that realization downstream.
+
+Analytic construction therefore accepts dependent reconvergence by default.
+Call `validate_exact_equivalence_domain(...)` to reject it explicitly, or
+`validate_equivalence_domain(...)` before claiming analytic/Monte Carlo parity.
+An exact analytic treatment of dependent reconvergence would require conditional
+or joint-state distributions rather than one marginal PMF per event.
 
 ## Seeds and thread safety
 

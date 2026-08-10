@@ -10,7 +10,13 @@ from enum import StrEnum, unique
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal
 
-from mc_dagprop.analytic import AnalyticActivity, AnalyticContext, OverflowRule, UnderflowRule
+from mc_dagprop.analytic import (
+    AnalyticActivity,
+    AnalyticContext,
+    OverflowRule,
+    UnderflowRule,
+    validate_exact_equivalence_domain,
+)
 from mc_dagprop.analytic.distributions import constant_pmf, empirical_pmf, exponential_pmf, gamma_pmf
 from mc_dagprop.monte_carlo import Activity, DagContext, Event, GenericDelayGenerator, MonteCarloPropagator
 from mc_dagprop.types import ActivityType, Second
@@ -445,6 +451,7 @@ def validate_equivalence_domain(
         propagator = analytic_from_context(
             context, registry, step=step, underflow_rule=UnderflowRule.REMOVE, overflow_rule=OverflowRule.REMOVE
         )
+        validate_exact_equivalence_domain(propagator.context)
         result = propagator.run()
     except (ArithmeticError, RuntimeError, TypeError, ValueError) as error:
         raise EquivalenceDomainError(str(error)) from error

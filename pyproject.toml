@@ -1,6 +1,6 @@
 [project]
 name = "mc-dagprop"
-version = "1.0.0rc1"
+version = "1.0.1rc1"
 description = "Discrete analytic DAG propagation with Monte Carlo validation backend"
 authors = [
     { name = "Florian Flükiger", email = "flfuchs@student.ethz.ch" },

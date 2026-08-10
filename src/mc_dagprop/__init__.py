@@ -26,6 +26,7 @@ from .analytic import (
     SimulatedEvent,
     UnderflowRule,
     create_analytic_propagator,
+    validate_exact_equivalence_domain,
 )
 from .frontend import (
     DelayFamilyRegistry,
@@ -64,5 +65,6 @@ __all__ = [
     "create_analytic_propagator",
     "monte_carlo_from_context",
     "validate_equivalence_domain",
+    "validate_exact_equivalence_domain",
     "validate_propagation_context",
 ]
