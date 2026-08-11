@@ -126,16 +126,32 @@ class DiscretePMF:
         if not math.isfinite(delta):
             raise ValueError("PMF shift must be finite")
         self._require_finite_support_sum(float(delta), "shift")
-        return DiscretePMF(
+        return self._from_operation(
             self.values + delta,
-            self.probabilities.copy(),
-            step=self.step,
-            allow_subprobability=self.allow_subprobability,
+            self.probabilities,
+            self.step,
+            float(self.total_mass),
         )
 
-    @staticmethod
+    @classmethod
+    def _from_canonical(
+        cls, values: npt.ArrayLike, probabilities: npt.ArrayLike, step: int, allow_subprobability: bool
+    ) -> DiscretePMF:
+        """Construct a trusted, already canonical internal operation result."""
+        result = object.__new__(cls)
+        frozen_values = np.array(values, dtype=np.float64, copy=True)
+        frozen_probabilities = np.array(probabilities, dtype=np.float64, copy=True)
+        frozen_values.setflags(write=False)
+        frozen_probabilities.setflags(write=False)
+        object.__setattr__(result, "values", frozen_values)
+        object.__setattr__(result, "probabilities", frozen_probabilities)
+        object.__setattr__(result, "step", step)
+        object.__setattr__(result, "allow_subprobability", allow_subprobability)
+        return result
+
+    @classmethod
     def _from_operation(
-        values: FloatArray, probabilities: npt.ArrayLike, step: int, expected_mass: float
+        cls, values: FloatArray, probabilities: npt.ArrayLike, step: int, expected_mass: float
     ) -> DiscretePMF:
         """Construct an operation result after correcting floating-point mass drift."""
         corrected = np.asarray(probabilities, dtype=np.float64).copy()
@@ -144,7 +160,7 @@ class DiscretePMF:
             corrected = (corrected.astype(np.longdouble) * (np.longdouble(expected_mass) / total)).astype(np.float64)
         elif expected_mass > 0.0:
             raise ArithmeticError("PMF operation lost all positive probability mass")
-        return DiscretePMF(values, corrected, step=step, allow_subprobability=expected_mass < 1.0)
+        return cls._from_canonical(values, corrected, step, allow_subprobability=expected_mass < 1.0)
 
     @staticmethod
     def _expected_mass(m1: float, m2: float) -> float:
