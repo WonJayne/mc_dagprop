@@ -317,7 +317,8 @@ class AnalyticPropagator:
                 f"underflow={under_mass}, overflow={over_mass}"
             )
         retained_mass = float(cast(np.float64, new_probs.sum()))
-        clipped = DiscretePMF(
+        # Subsetting canonical support and inserting validated event bounds preserves canonical order and alignment.
+        clipped = DiscretePMF._from_canonical(  # pyright: ignore[reportPrivateUsage]
             new_vals,
             new_probs,
             step=pmf.step,

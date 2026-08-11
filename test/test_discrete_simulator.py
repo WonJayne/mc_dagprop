@@ -1,5 +1,6 @@
 import unittest
 from dataclasses import replace
+from typing import Never
 
 import numpy as np
 import pytest
@@ -406,6 +407,31 @@ def test_rule_combinations_preserve_total_mass_and_non_negative_probabilities(
     result = _run_rule_case(underflow_rule, overflow_rule)
 
     assert np.all(result.pmf.probabilities >= 0.0)
+    assert np.isclose(float(result.pmf.total_mass + result.underflow + result.overflow), 1.0, rtol=1e-12, atol=1e-15)
+
+
+@pytest.mark.parametrize(
+    ("underflow_rule", "overflow_rule"),
+    [(under_rule, over_rule) for under_rule in UnderflowRule for over_rule in OverflowRule],
+)
+def test_bound_clipping_skips_public_canonicalization(
+    monkeypatch: pytest.MonkeyPatch, underflow_rule: UnderflowRule, overflow_rule: OverflowRule
+) -> None:
+    context = AnalyticContext(
+        (Event("event", EventTimestamp(0.0, 2.0, 0.0)),), {}, (), 1, underflow_rule, overflow_rule
+    )
+    propagator = create_analytic_propagator(context)
+    pmf = DiscretePMF(np.array([-1.0, 0.0, 1.0, 2.0, 3.0]), np.array([0.1, 0.2, 0.3, 0.25, 0.15]), step=1)
+
+    def reject_public_canonicalization(_values: np.ndarray, _probabilities: np.ndarray) -> Never:
+        raise AssertionError("bound clipping must use the trusted canonical construction path")
+
+    monkeypatch.setattr(DiscretePMF, "_canonical_arrays", staticmethod(reject_public_canonicalization))
+
+    result = propagator._convert_to_simulated_event(pmf, 0, 2)
+
+    assert not result.pmf.values.flags.writeable
+    assert not result.pmf.probabilities.flags.writeable
     assert np.isclose(float(result.pmf.total_mass + result.underflow + result.overflow), 1.0, rtol=1e-12, atol=1e-15)
 
 
