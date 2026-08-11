@@ -126,12 +126,7 @@ class DiscretePMF:
         if not math.isfinite(delta):
             raise ValueError("PMF shift must be finite")
         self._require_finite_support_sum(float(delta), "shift")
-        return self._from_operation(
-            self.values + delta,
-            self.probabilities,
-            self.step,
-            float(self.total_mass),
-        )
+        return self._from_operation(self.values + delta, self.probabilities, self.step, float(self.total_mass))
 
     @classmethod
     def _from_canonical(
