@@ -43,7 +43,6 @@ class TestDiscretePMF(unittest.TestCase):
         self.assertEqual(float(result.total_mass), 1.0)
         np.testing.assert_allclose(result.probabilities, [0.25, 0.75], rtol=0.0, atol=1.0e-12)
 
-
     def test_operation_results_are_immutable(self) -> None:
         pmf = DiscretePMF(np.array([0.0, 1.0]), np.array([0.4, 0.6]), step=1)
 
@@ -74,12 +73,7 @@ class TestDiscretePMF(unittest.TestCase):
                 np.testing.assert_allclose(result.probabilities, public_result.probabilities, rtol=0.0, atol=1e-15)
 
     def test_trusted_operation_preserves_subprobability_mass(self) -> None:
-        pmf = DiscretePMF(
-            np.array([0.0, 1.0]),
-            np.array([0.2, 0.3]),
-            step=1,
-            allow_subprobability=True,
-        )
+        pmf = DiscretePMF(np.array([0.0, 1.0]), np.array([0.2, 0.3]), step=1, allow_subprobability=True)
 
         shifted = pmf.shift(2.0)
         convolved = pmf.convolve(DiscretePMF.delta(0.0, step=1))
@@ -90,11 +84,7 @@ class TestDiscretePMF(unittest.TestCase):
         self.assertEqual(float(convolved.total_mass), 0.5)
 
     def test_public_constructor_still_canonicalizes_duplicates(self) -> None:
-        pmf = DiscretePMF(
-            np.array([1.0, 0.0, 1.0]),
-            np.array([0.2, 0.3, 0.5]),
-            step=1,
-        )
+        pmf = DiscretePMF(np.array([1.0, 0.0, 1.0]), np.array([0.2, 0.3, 0.5]), step=1)
 
         np.testing.assert_array_equal(pmf.values, [0.0, 1.0])
         np.testing.assert_allclose(pmf.probabilities, [0.3, 0.7], rtol=0.0, atol=1e-15)
