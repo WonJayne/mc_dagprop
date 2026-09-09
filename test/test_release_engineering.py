@@ -70,7 +70,7 @@ def test_source_tree_type_build_dependencies_are_in_the_locked_dev_environment()
         pyproject = tomllib.load(pyproject_file)
 
     development_dependencies = pyproject["tool"]["poetry"]["group"]["dev"]["dependencies"]
-    assert development_dependencies["setuptools"] == ">=77,<83"
+    assert development_dependencies["setuptools"] == ">=77,<85"
     assert development_dependencies["pybind11"] == ">=2.13"
 
 
