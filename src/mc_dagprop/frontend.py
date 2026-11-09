@@ -17,9 +17,15 @@ from mc_dagprop.analytic import (
     UnderflowRule,
     validate_exact_equivalence_domain,
 )
-from mc_dagprop.analytic.distributions import constant_pmf, empirical_pmf, exponential_pmf, gamma_pmf
+from mc_dagprop.analytic.distributions import (
+    ContinuousQuantization,
+    constant_pmf,
+    empirical_pmf,
+    exponential_pmf,
+    gamma_pmf,
+)
 from mc_dagprop.monte_carlo import Activity, DagContext, Event, GenericDelayGenerator, MonteCarloPropagator
-from mc_dagprop.types import ActivityType, Second
+from mc_dagprop.types import ActivityIndex, ActivityType, Second
 
 from .analytic._pmf import DiscretePMF
 
@@ -167,9 +173,17 @@ class DelayFamilyRegistry:
     multiplied by the activity's base duration. Exponential ``scale`` is the
     mean factor; gamma ``scale`` is its scale factor; ``max_scale`` is the
     inclusive truncation factor for either continuous distribution.
+
+    ``continuous_quantization="linear"`` preserves continuous extra-delay
+    means on the analytic grid by splitting mass between adjacent points.
+    The default ``floor`` retains the historical lower-bin approximation.
+    Neither option changes Monte Carlo sampling.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, continuous_quantization: ContinuousQuantization = "floor") -> None:
+        if continuous_quantization not in ("floor", "linear"):
+            raise ValueError("continuous_quantization must be 'floor' or 'linear'")
+        self.continuous_quantization = continuous_quantization
         self._families: dict[ActivityType, _DelayFamily] = {}
 
     def _register(self, activity_type: ActivityType, family: _DelayFamily) -> None:
@@ -193,11 +207,22 @@ class DelayFamilyRegistry:
         )
 
     def add_constant(self, activity_type: ActivityType, factor: float) -> None:
-        """Register deterministic extra delay ``base_duration * factor``."""
+        """Register deterministic extra delay ``base_duration * factor``.
+
+        Linear quantization also projects a non-grid-aligned constant extra
+        delay onto adjacent grid points; the default requires exact alignment.
+        """
         factor_value = _require_finite_non_negative(factor, "constant delay factor")
 
         def to_constant_extra_pmf(base: Second, step: int) -> DiscretePMF:
-            return constant_pmf(_checked_product(base, factor_value, "constant extra delay"), step)
+            extra = _checked_product(base, factor_value, "constant extra delay")
+            if self.continuous_quantization == "linear":
+                _require_positive_step(step)
+                lower = math.floor(extra / step) * step
+                fraction = (extra - lower) / step
+                if fraction > 0.0:
+                    return empirical_pmf((lower, lower + step), (1.0 - fraction, fraction), step)
+            return constant_pmf(extra, step)
 
         self._register(
             activity_type,
@@ -223,7 +248,7 @@ class DelayFamilyRegistry:
                 return constant_pmf(0.0, step)
             scale_seconds = _checked_product(base, scale_value, "exponential scale in seconds")
             cutoff_seconds = _checked_product(base, max_scale_value, "exponential cutoff in seconds")
-            return exponential_pmf(scale_seconds, step, 0.0, cutoff_seconds)
+            return exponential_pmf(scale_seconds, step, 0.0, cutoff_seconds, quantization=self.continuous_quantization)
 
         self._register(
             activity_type,
@@ -247,7 +272,9 @@ class DelayFamilyRegistry:
                 return constant_pmf(0.0, step)
             scale_seconds = _checked_product(base, scale_value, "gamma scale in seconds")
             cutoff_seconds = _checked_product(base, max_scale_value, "gamma cutoff in seconds")
-            return gamma_pmf(shape_value, scale_seconds, step, 0.0, cutoff_seconds)
+            return gamma_pmf(
+                shape_value, scale_seconds, step, 0.0, cutoff_seconds, quantization=self.continuous_quantization
+            )
 
         self._register(
             activity_type,
@@ -267,12 +294,19 @@ class DelayFamilyRegistry:
             family.add_to_generator(generator, activity_type)
         return generator
 
-    def increment_pmf(self, activity: Activity, step: int) -> DiscretePMF:
-        """Return the full base-plus-extra activity-duration PMF."""
+    def increment_pmf(self, activity: Activity, step: int, *, base_duration: Second | None = None) -> DiscretePMF:
+        """Return the full base-plus-extra activity-duration PMF.
+
+        ``base_duration`` optionally preserves the original delay-law scaling
+        when the deterministic activity duration has been aligned to a grid.
+        """
+        base = activity.minimal_duration if base_duration is None else _require_finite_non_negative(
+            base_duration, "activity base duration"
+        )
         family = self._families.get(activity.activity_type)
         if family is None:
             return constant_pmf(activity.minimal_duration, step)
-        return family.to_extra_pmf(activity.minimal_duration, step).shift(activity.minimal_duration)
+        return family.to_extra_pmf(base, step).shift(activity.minimal_duration)
 
     def has_continuous_family(self, activity_types: Iterable[ActivityType]) -> bool:
         """Return whether any selected activity type uses a continuous family."""
@@ -399,14 +433,29 @@ def analytic_from_context(
     step: int,
     overflow_rule: OverflowRule,
     underflow_rule: UnderflowRule,
+    activity_base_durations: Mapping[ActivityIndex, Second] | None = None,
 ) -> AnalyticPropagator:
-    """Create an analytic propagator, converting extra delays into increments."""
+    """Create an analytic propagator, converting extra delays into increments.
+
+    Optional original ``activity_base_durations``, keyed by activity index,
+    control delay-family scaling independently of grid-aligned durations.
+    Omitted entries use the context activity's duration.
+    """
     validate_propagation_context(context)
     step = _require_positive_step(step)
+    base_durations = {} if activity_base_durations is None else dict(activity_base_durations)
+    known_indices = {activity.idx for activity in context.activities.values()}
+    for index, duration in base_durations.items():
+        _require_non_negative_index(index, "activity base duration index")
+        if index not in known_indices:
+            raise ValueError(f"unknown activity base duration index {index}")
+        _require_finite_non_negative(duration, "activity base duration")
     analytic_activities = {
         (int(source), int(target)): (
             activity.idx,
-            AnalyticActivity(activity.idx, registry.increment_pmf(activity, step)),
+            AnalyticActivity(
+                activity.idx, registry.increment_pmf(activity, step, base_duration=base_durations.get(activity.idx))
+            ),
         )
         for (source, target), activity in context.activities.items()
     }
@@ -444,6 +493,8 @@ def validate_equivalence_domain(
     """
     mode = _require_equivalence_mode(mode)
     used_activity_types = {activity.activity_type for activity in context.activities.values()}
+    if registry.continuous_quantization != "floor":
+        raise EquivalenceDomainError("qualified equivalence requires floor quantization")
     if mode is EquivalenceMode.EXACT_DISCRETE and registry.has_continuous_family(used_activity_types):
         raise EquivalenceDomainError("exact-discrete equivalence excludes exponential and gamma families")
 

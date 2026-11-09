@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import sys
 from collections.abc import Iterable
-from typing import cast
+from typing import Literal, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -13,6 +13,22 @@ from mc_dagprop.types import Second
 from ._pmf import DiscretePMF
 
 type FloatArray = npt.NDArray[np.float64]
+type ContinuousQuantization = Literal["floor", "linear"]
+
+
+def _validate_quantization(quantization: ContinuousQuantization) -> None:
+    if quantization not in ("floor", "linear"):
+        raise ValueError("quantization must be 'floor' or 'linear'")
+
+
+def _linear_pmf(values: FloatArray, probabilities: FloatArray, means: FloatArray, step: int) -> DiscretePMF:
+    """Split interval mass across adjacent grid points, preserving its mean."""
+    fractions = np.clip((means - values) / step, 0.0, 1.0)
+    masses = np.zeros(len(values) + 1, dtype=np.float64)
+    masses[:-1] += probabilities * (1.0 - fractions)
+    masses[1:] += probabilities * fractions
+    support = np.append(values, values[-1] + step)
+    return DiscretePMF(support, _normalise_masses(masses), step=step)
 
 
 def _positive_step(value: object) -> int:
@@ -186,13 +202,19 @@ def _normalise_masses(masses: Iterable[float]) -> FloatArray:
     return probabilities
 
 
-def exponential_pmf(scale: Second, step: int, start: Second, stop: Second) -> DiscretePMF:
-    """Return a floor-quantized, truncated exponential distribution.
+def exponential_pmf(
+    scale: Second, step: int, start: Second, stop: Second, *, quantization: ContinuousQuantization = "floor"
+) -> DiscretePMF:
+    """Return a quantized, truncated exponential distribution.
 
     The result represents ``floor(X / step) * step`` conditional on
     ``start <= X <= stop``. A non-grid-aligned ``stop`` therefore contributes a
-    partial final bin rather than being rounded outward.
+    partial final bin rather than being rounded outward. With ``linear``, each
+    interval's mass is split across its adjacent grid points to preserve the
+    continuous mean. This adds quantization variance and can extend support
+    by less than one step beyond ``stop``.
     """
+    _validate_quantization(quantization)
     if isinstance(scale, bool):
         raise TypeError("scale must be a real number, not bool")
     scale_value = float(scale)
@@ -207,6 +229,16 @@ def exponential_pmf(scale: Second, step: int, start: Second, stop: Second) -> Di
     if not np.any(masses > 0.0):
         masses = upper_edges - lower_edges
     probabilities = _normalise_masses(masses)
+    if quantization == "linear":
+        interval_widths = upper_edges - lower_edges
+        offsets = np.empty_like(interval_widths)
+        small = widths < 1e-4
+        ratios = widths[small]
+        offsets[small] = interval_widths[small] * (0.5 - ratios / 12.0 + ratios**3 / 720.0)
+        with np.errstate(over="ignore"):
+            offsets[~small] = scale_value - interval_widths[~small] / np.expm1(widths[~small])
+        means = np.clip(lower_edges + offsets, lower_edges, upper_edges)
+        return _linear_pmf(values, probabilities, means, step)
     return DiscretePMF(values, probabilities, step=step)
 
 
@@ -351,12 +383,19 @@ def _normalise_log_masses(log_masses: Iterable[float]) -> FloatArray:
     return _normalise_masses(np.exp(log_mass_array - maximum))
 
 
-def gamma_pmf(shape: float, scale: Second, step: int, start: Second, stop: Second) -> DiscretePMF:
-    """Return a floor-quantized, truncated gamma distribution.
+def gamma_pmf(
+    shape: float, scale: Second, step: int, start: Second, stop: Second,
+    *, quantization: ContinuousQuantization = "floor",
+) -> DiscretePMF:
+    """Return a quantized, truncated gamma distribution.
 
     The result represents ``floor(X / step) * step`` conditional on
     ``start <= X <= stop`` and retains a partial final quantization bin.
+    ``linear`` instead splits interval mass across adjacent grid points,
+    preserving the continuous mean while adding quantization variance. Its
+    support can extend by less than one step beyond ``stop``.
     """
+    _validate_quantization(quantization)
     if isinstance(shape, bool) or isinstance(scale, bool):
         raise TypeError("gamma shape and scale must be real numbers, not bool")
     shape_value = float(shape)
@@ -371,19 +410,41 @@ def gamma_pmf(shape: float, scale: Second, step: int, start: Second, stop: Secon
         scaled_upper_edges = upper_edges / scale_value
     final_scaled_upper = float(cast(np.float64, scaled_upper_edges[-1]))
     if final_scaled_upper == 0.0:
+        if quantization == "linear":
+            raise ArithmeticError("gamma interval is too small relative to scale for linear quantization")
         probabilities = np.zeros_like(values)
         probabilities[-1] = 1.0
         return DiscretePMF(values, probabilities, step=step)
     if final_scaled_upper <= shape_value / 2.0:
-        log_masses: Iterable[float] = _deep_lower_tail_log_masses(shape_value, scaled_lower_edges, scaled_upper_edges)
+        log_masses = _deep_lower_tail_log_masses(shape_value, scaled_lower_edges, scaled_upper_edges)
     else:
         lower_items = cast(Iterable[np.float64], scaled_lower_edges)
         upper_items = cast(Iterable[np.float64], scaled_upper_edges)
-        log_masses = (
+        log_masses = tuple(
             _gamma_interval_log_probability(shape_value, float(lower), float(upper))
             for lower, upper in zip(lower_items, upper_items, strict=True)
         )
     probabilities = _normalise_log_masses(log_masses)
+    if quantization == "linear":
+        if final_scaled_upper <= shape_value / 2.0:
+            moment_logs = _deep_lower_tail_log_masses(shape_value + 1.0, scaled_lower_edges, scaled_upper_edges)
+            reference_mean = float(stop) * (shape_value / (shape_value + 1.0)) * math.exp(
+                _log_lower_incomplete_gamma_series_factor(shape_value + 1.0, final_scaled_upper)
+                - _log_lower_incomplete_gamma_series_factor(shape_value, final_scaled_upper)
+            )
+        else:
+            moment_logs = tuple(
+                _gamma_interval_log_probability(shape_value + 1.0, float(lower), float(upper))
+                for lower, upper in zip(scaled_lower_edges, scaled_upper_edges, strict=True)
+            )
+            reference_mean = shape_value * scale_value
+        means = lower_edges.copy()
+        for index, (mass_log, moment_log) in enumerate(zip(log_masses, moment_logs, strict=True)):
+            if probabilities[index] > 0.0:
+                means[index] = reference_mean * math.exp(moment_log - mass_log)
+        if not np.all(np.isfinite(means)):
+            raise ArithmeticError("gamma interval mean is not finite")
+        return _linear_pmf(values, probabilities, np.clip(means, lower_edges, upper_edges), step)
     return DiscretePMF(values, probabilities, step=step)
 
 

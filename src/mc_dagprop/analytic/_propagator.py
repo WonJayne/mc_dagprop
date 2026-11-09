@@ -33,7 +33,7 @@ class PropagationContextLike(Protocol):
 class DelayFamilyRegistryLike(Protocol):
     """Structural delay-registry interface consumed by the analytic frontend."""
 
-    def increment_pmf(self, activity: Activity, step: int) -> DiscretePMF: ...
+    def increment_pmf(self, activity: Activity, step: int, *, base_duration: Second | None = None) -> DiscretePMF: ...
 
 
 class _AnalyticFactory(Protocol):
@@ -45,6 +45,7 @@ class _AnalyticFactory(Protocol):
         step: int,
         overflow_rule: OverflowRule,
         underflow_rule: UnderflowRule,
+        activity_base_durations: Mapping[ActivityIndex, Second] | None = None,
     ) -> AnalyticPropagator: ...
 
 
@@ -130,11 +131,15 @@ class AnalyticPropagator:
         step: int,
         overflow_rule: OverflowRule,
         underflow_rule: UnderflowRule,
+        activity_base_durations: Mapping[ActivityIndex, Second] | None = None,
     ) -> AnalyticPropagator:
         """Create an analytic propagator from the shared logical frontend."""
         frontend = cast(_FrontendModule, cast(object, import_module("mc_dagprop.frontend")))
         factory: _AnalyticFactory = frontend.analytic_from_context
-        propagator = factory(context, registry, step=step, overflow_rule=overflow_rule, underflow_rule=underflow_rule)
+        propagator = factory(
+            context, registry, step=step, overflow_rule=overflow_rule, underflow_rule=underflow_rule,
+            activity_base_durations=activity_base_durations,
+        )
         if not isinstance(propagator, cls):
             raise TypeError("analytic frontend returned an incompatible propagator")
         return propagator

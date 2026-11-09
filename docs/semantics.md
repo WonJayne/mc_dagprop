@@ -55,9 +55,31 @@ sampling, or propagation raises `OverflowError` instead of producing infinity.
 ## Analytic PMFs and bounds
 
 Analytic PMFs live on a zero-origin integer grid. All binary PMF operations
-require equal grid steps. Continuous families are converted to the distribution
+require equal grid steps. By default, continuous families are converted to the distribution
 of `floor(sample / step) * step`, conditional on their exact finite cutoff; a
 partial final bin is retained when the cutoff is not grid-aligned.
+
+Use `DelayFamilyRegistry(continuous_quantization="linear")` to preserve the
+continuous extra-delay mean instead. In each interval, its probability mass
+is split between adjacent grid points using the conditional first moment.
+For example, an exponential extra delay with mean 0.1 seconds is almost
+erased by repeated one-second flooring; linear projection retains its mean.
+Direct `exponential_pmf` and `gamma_pmf` calls accept `quantization="linear"`.
+This projection adds variance (at most `step**2 / 4` per increment), and the
+last grid point may lie less than one step beyond the continuous cutoff.
+It therefore improves mean bias but does not establish equality with the
+continuous Monte Carlo tail or remove dependence approximations at merges.
+Grid steps remain positive integer seconds; fractional grids are not supported.
+
+When aligning deterministic durations to the analytic grid, pass original
+durations through `analytic_from_context(..., activity_base_durations=...)`
+(also accepted by `AnalyticPropagator.from_context`). The map is keyed by
+activity index and preserves the original delay-family scale independently
+of the aligned deterministic duration. Missing entries use the context
+duration. This does not eliminate the separate timing-alignment error.
+In linear mode, non-grid-aligned constant extras are also split between
+adjacent grid points to retain their mean; the default still requires exact
+alignment for constants.
 
 Analytic bound policies have explicit mass semantics:
 
@@ -91,6 +113,8 @@ defined by flooring every sampled stochastic activity extra delay to the
 analytic grid before event propagation. It is statistical, not sample-by-
 sample. Flooring only a final event time is not equivalent on a multi-activity
 path because floor quantization is not additive.
+This equivalence mode requires the default floor quantization; it deliberately
+rejects linear projection, whose extra variance changes the propagated law.
 
 ## Dependence at merges
 
